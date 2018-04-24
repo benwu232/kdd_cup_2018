@@ -1,0 +1,9 @@
+clf/
+input/
+log/
+submit/
+tblog/
+.idea/
+*.pyc
+*.png
+
