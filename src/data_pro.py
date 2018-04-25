@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import datetime as dt
+from lib.define import *
 
 def read_bj_aq():
     bj_aq = pd.read_csv('../input/beijing_aq.csv')
@@ -50,7 +51,78 @@ def complete_time(data_dict):
             t += dt.timedelta(hours=1)
     pass
 
+def dt2str(dt, format="%Y-%m-%d %H:%M:%S"):
+    return dt.strftime(format)
 
+def dt2pdts(dt):
+    str = dt2str(dt)
+    ts = pd.Timestamp(str)
+    return ts
+
+def build_df1(bj_aq):
+    data_dict = {}
+    for key in bj_stations:
+        data_dict[key] = []
+    bj_aq.UtcTime = pd.to_datetime(bj_aq.UtcTime)
+    #bj_aq.UtcTime.apply(to_pydt)
+    start = dt.datetime(year=2017, month=1, day=1, hour=0)
+    end = pd.to_datetime(bj_aq.UtcTime.iloc[-1]).to_pydatetime()
+    t = start
+    df_cnt = 0
+    while t <= end:
+        for st in data_dict:
+            ts = dt2pdts(t)
+            row = bj_aq[(bj_aq.StationId==st) & (bj_aq.UtcTime==ts)]
+            if len(row) > 0:
+                row_dict = row.to_dict()
+            else:
+                row_dict = {'StationId': st, 'UtcTime': ts, 'PM25': np.nan, 'PM10': np.nan, 'NO2': np.nan, 'CO': np.nan, 'O3': np.nan, 'SO2': np.nan}
+            data_dict[st].append(row_dict)
+        df_cnt += 1
+        if df_cnt % 100 == 0:
+            print(df_cnt)
+        t += dt.timedelta(hours=1)
+
+    for st in data_dict:
+        data_dict[st] = pd.DataFrame(data_dict)
+        print(st, len(data_dict[st]))
+    return data_dict
+
+def build_df(bj_aq):
+    data_dict = {}
+    for key in bj_stations:
+        data_dict[key] = []
+    bj_aq.UtcTime = pd.to_datetime(bj_aq.UtcTime)
+    #bj_aq.UtcTime.apply(to_pydt)
+    start = dt.datetime(year=2017, month=1, day=1, hour=0)
+    end = pd.to_datetime(bj_aq.UtcTime.iloc[-1]).to_pydatetime()
+    for st in data_dict:
+        sub_df = bj_aq[bj_aq.StationId==st]
+        print('Before insert missing: {}, {}'.format(st, len(sub_df)))
+        df_cnt = 0
+        t = start
+
+        while t <= end:
+            ts = dt2pdts(t)
+            #row = sub_df[sub_df.UtcTime==ts]
+            sub_row = sub_df.iloc[df_cnt]
+            if ts < sub_row.UtcTime:
+                row_dict = {'StationId': st, 'UtcTime': ts, 'PM25': np.nan, 'PM10': np.nan, 'NO2': np.nan, 'CO': np.nan, 'O3': np.nan, 'SO2': np.nan}
+                t += dt.timedelta(hours=1)
+            elif ts == sub_row.UtcTime:
+                row_dict = sub_row.to_dict()
+                t += dt.timedelta(hours=1)
+                df_cnt += 1
+                #if df_cnt % 1000 == 0:
+                #    print(df_cnt)
+            else:
+                print('should not run here!')
+                exit()
+            data_dict[st].append(row_dict)
+        data_dict[st] = pd.DataFrame(data_dict[st])
+        print('After insert missing: {}, {}'.format(st, len(data_dict[st])))
+
+    return data_dict
 
 def df2dict(df):
     data_dict = {}
@@ -61,6 +133,7 @@ def df2dict(df):
 if __name__ == '__main__':
     bj_aq = read_bj_aq()
     check_stations(bj_aq)
+    build_df(bj_aq)
     #data_dict = df2dict(bj_aq)
     #complete_time(data_dict)
     #print(bj_aq.StationId.unique())
