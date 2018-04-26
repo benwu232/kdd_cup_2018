@@ -1,4 +1,4 @@
-
+import numpy as np
 from geopy.distance import geodesic
 
 bj_stations = [
@@ -27,4 +27,6 @@ def cal_pos(point, origin):
 
 #print(cal_pos((39.1, 115.1), bj_origin))
 #print(cal_pos((50.6, -1.9), ld_origin))
+
+
 

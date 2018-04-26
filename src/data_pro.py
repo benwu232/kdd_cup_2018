@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import datetime as dt
+import pickle
 from lib.define import *
 
 def read_bj_aq():
@@ -33,23 +34,6 @@ def check_stations(df):
 
     print('not equal count: {}'.format(not_eq_cnt))
 
-
-def complete_time(data_dict):
-    for st in data_dict.keys():
-        data_dict[st].UtcTime = pd.to_datetime(data_dict[st].UtcTime)
-        start = data_dict[st].UtcTime.iloc[0].to_pydatetime()
-        end = data_dict[st].UtcTime.iloc[-1].to_pydatetime()
-        diff = end - start
-        t = start
-        df_cnt = 0
-        while t <= end:
-            if t == data_dict[st].UtcTime.iloc[df_cnt].to_pydatetime():
-                t += dt.timedelta(hours=1)
-                df_cnt += 1
-                continue
-            print(t)
-            t += dt.timedelta(hours=1)
-    pass
 
 def dt2str(dt, format="%Y-%m-%d %H:%M:%S"):
     return dt.strftime(format)
@@ -88,7 +72,7 @@ def build_df1(bj_aq):
         print(st, len(data_dict[st]))
     return data_dict
 
-def build_df(bj_aq):
+def build_data_dict(bj_aq):
     data_dict = {}
     for key in bj_stations:
         data_dict[key] = []
@@ -98,7 +82,7 @@ def build_df(bj_aq):
     end = pd.to_datetime(bj_aq.UtcTime.iloc[-1]).to_pydatetime()
     for st in data_dict:
         sub_df = bj_aq[bj_aq.StationId==st]
-        print('Before insert missing: {}, {}'.format(st, len(sub_df)))
+        print('Before insert missing rows: {}, {}'.format(st, len(sub_df)))
         df_cnt = 0
         t = start
 
@@ -120,21 +104,104 @@ def build_df(bj_aq):
                 exit()
             data_dict[st].append(row_dict)
         data_dict[st] = pd.DataFrame(data_dict[st])
-        print('After insert missing: {}, {}'.format(st, len(data_dict[st])))
+        print('After insert missing rows: {}, {}'.format(st, len(data_dict[st])))
 
     return data_dict
 
-def df2dict(df):
-    data_dict = {}
-    for st in df.StationId.unique():
-        data_dict[st] = df[df.StationId == st]
-    return data_dict
+def build_bj_st():
+    with open('../input/bj_st_dict.pkl', 'rb') as fp:
+        data_dict = pickle.load(fp)
+
+    data_nan_dict = {}
+    for st in data_dict:
+        data_dict[st] = data_dict[st][['PM25', 'PM10', 'O3', 'CO', 'NO2', 'SO2']]
+        data_nan_dict[st] = pd.isnull(data_dict[st])#.astype('uint8')
+        #data_nan_dict.columns = ['PM25_NAN', 'PM10_NAN', 'O3_NAN', 'CO_NAN', 'NO2_NAN', 'SO2_NAN']
+        #data_dict[st] = pd.concat([data_dict[st], data_nan_dict], axis=1)
+    return data_dict, data_nan_dict
+
+
+def batch_gen(indices, build_batch, bb_pars={},
+              batch_size=128, shuffle=False, forever=True, drop_last=True):
+    data_len = len(indices)
+    #indices = np.arange(data_len)
+
+    if shuffle:
+        np.random.shuffle(indices)
+
+    while True:
+        for k in range(0, data_len-batch_size, batch_size):
+            excerpt = indices[k:k + batch_size]
+            batch_data = build_batch(excerpt, pars=bb_pars)
+            yield batch_data
+
+        if not forever:
+            break
+
+        if shuffle:
+            np.random.shuffle(indices)
+
+    if not drop_last:
+        k += batch_size
+        if k < data_len:
+            excerpt = indices[k:]
+            batch_data = build_batch(excerpt, pars=bb_pars)
+            yield batch_data
+
+#city: 0 - Beijing; 1 - London
+#type: 0 - station, 1 - grid
+class DataBuilder(object):
+    def __init__(self):
+        #self.data = [[] for _ in (0, 1)]
+        bj_st, bj_st_nan = build_bj_st()
+        self.data = bj_st['aotizhongxin_aq'].values
+        self.data_nan = bj_st_nan['aotizhongxin_aq'].values
+        self.past_len = 128
+        self.future_len = 48
+
+    def build_batch(self, idxes, pars={}):
+        with_targets = False
+        if 'with_targets' in pars:
+            with_targets = pars['with_targets']
+
+        #print('SeqLen = {}'.format(self.past_len))
+        data_batch = []
+        data_batch_nan = []
+        target_batch = []
+        target_batch_nan = []
+        for sti in idxes:
+            data_batch.append(self.data[sti+1-self.past_len:sti+1])
+            data_batch_nan.append(self.data_nan[sti+1-self.past_len:sti+1])
+
+            if with_targets:
+                target_batch.append(self.data[sti+1:sti+1+self.future_len, :3])
+                target_batch_nan.append(self.data_nan[sti+1:sti+1+self.future_len, :3])
+
+        #print(len(data_batch), type(data_batch))
+        data_batch = np.asarray(data_batch, dtype=np.float32)
+        data_batch = np.nan_to_num(data_batch)
+        data_batch_nan = np.asarray(data_batch_nan, dtype=np.float32)
+        if with_targets:
+            target_batch = np.asarray(target_batch, dtype=np.float32)
+            target_batch = np.nan_to_num(target_batch)
+            target_batch_nan = np.asarray(target_batch_nan, dtype=np.float32)
+            return data_batch, data_batch_nan, target_batch, target_batch_nan
+        return data_batch, data_batch_nan
+
+
+
 
 if __name__ == '__main__':
+    '''
     bj_aq = read_bj_aq()
     check_stations(bj_aq)
-    build_df(bj_aq)
-    #data_dict = df2dict(bj_aq)
+    build_data_dict(bj_aq)
+    '''
+    #build_bj_st()
+    data_builder = DataBuilder()
+    data_builder.build_batch([200,300,400], pars={'with_targets': True})
+
+
     #complete_time(data_dict)
     #print(bj_aq.StationId.unique())
     pass
