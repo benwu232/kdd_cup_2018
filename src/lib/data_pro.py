@@ -108,7 +108,7 @@ def build_data_dict(bj_aq):
 
     return data_dict
 
-def build_bj_st():
+def build_bj_st1():
     with open('../input/bj_st_dict.pkl', 'rb') as fp:
         data_dict = pickle.load(fp)
 
@@ -119,6 +119,16 @@ def build_bj_st():
         #data_nan_dict.columns = ['PM25_NAN', 'PM10_NAN', 'O3_NAN', 'CO_NAN', 'NO2_NAN', 'SO2_NAN']
         #data_dict[st] = pd.concat([data_dict[st], data_nan_dict], axis=1)
     return data_dict, data_nan_dict
+
+def build_bj_st():
+    with open('../input/bj_st_dict.pkl', 'rb') as fp:
+        data_dict = pickle.load(fp)
+
+    data_list = []
+    for st in data_dict:
+        data_list.append(data_dict[st][['PM25', 'PM10', 'O3', 'CO', 'NO2', 'SO2']])
+    np_data = np.stack(data_list)
+    return np_data
 
 
 def batch_gen(indices, build_batch, bb_pars={},
@@ -151,42 +161,109 @@ def batch_gen(indices, build_batch, bb_pars={},
 #city: 0 - Beijing; 1 - London
 #type: 0 - station, 1 - grid
 class DataBuilder(object):
-    def __init__(self):
+    def __init__(self, batch_size=32):
         #self.data = [[] for _ in (0, 1)]
-        bj_st, bj_st_nan = build_bj_st()
-        self.data = bj_st['aotizhongxin_aq'].values
-        self.data_nan = bj_st_nan['aotizhongxin_aq'].values
-        self.past_len = 128
-        self.future_len = 48
+        self.data = build_bj_st()
+        self.data_mask = np.isnan(self.data).astype(int)
+        #self.data_mask = np.asarray(self.data_mask, dtype=np.float32)
+        self.data = np.asarray(self.data, dtype=np.float32)
+        self.data = np.nan_to_num(self.data)
+        #todo: need to add other data preprocessing, e.g. 9997, a number which is too big
+        self.time_len = self.data.shape[1]
+        self.n_enc_feature = self.data.shape[-1]
+        self.n_dec_feature = 3
+        self.max_encode_len = 256
+        self.encode_len = 128
+        self.decode_len = 48
+        self.val_to_end = 500
+        self.batch_size = batch_size
+        self.build_idxes()
+        self.train_bb = batch_gen(self.train_idxes, self.build_batch, batch_size=self.batch_size,
+                                  shuffle=True, forever=True, drop_last=True)
+        self.val_bb = batch_gen(self.val_idxes, self.build_batch, batch_size=self.batch_size,
+                                  shuffle=True, forever=True, drop_last=True)
+
+    def build_idxes(self):
+        self.idxes = []
+        for s_idx in range(self.data.shape[0]):
+            for t_idx in range(self.encode_len, self.data.shape[1]-self.decode_len):
+                self.idxes.append((s_idx, t_idx))
+
+        self.train_idxes = []
+        for s_idx in range(self.data.shape[0]):
+            for t_idx in range(self.encode_len, self.time_len-self.decode_len-self.val_to_end):
+                self.train_idxes.append((s_idx, t_idx))
+
+        self.val_idxes = []
+        for s_idx in range(self.data.shape[0]):
+            for t_idx in range(self.time_len-self.val_to_end-self.decode_len, self.time_len-self.decode_len):
+                self.val_idxes.append((s_idx, t_idx))
+
+        self.test_idxes = []
+        for s_idx in range(self.data.shape[0]):
+            self.val_idxes.append((s_idx, self.time_len))
 
     def build_batch(self, idxes, pars={}):
         with_targets = False
         if 'with_targets' in pars:
             with_targets = pars['with_targets']
 
+        x_encode = np.zeros([self.batch_size, self.max_encode_len, self.n_enc_feature])
+        is_nan_encode = np.zeros_like(x_encode)
+        y_decode = np.zeros([self.batch_size, self.decode_len, self.n_dec_feature])
+        is_nan_decode = np.zeros_like(y_decode)
+        encode_len = np.zeros([self.batch_size])
+        decode_len = np.zeros([self.batch_size])
+
         #print('SeqLen = {}'.format(self.past_len))
-        data_batch = []
-        data_batch_nan = []
-        target_batch = []
-        target_batch_nan = []
-        for sti in idxes:
-            data_batch.append(self.data[sti+1-self.past_len:sti+1])
-            data_batch_nan.append(self.data_nan[sti+1-self.past_len:sti+1])
+        for k, sti in enumerate(idxes):
+            s_idx = sti[0]
+            t_idx = sti[1]
+            x_encode[k, :self.encode_len, :] = self.data[s_idx, t_idx-self.encode_len:t_idx, :]
+            is_nan_encode[k, :self.encode_len, :] = self.data_mask[s_idx, t_idx-self.encode_len:t_idx, :]
+            encode_len[k] = self.encode_len
 
             if with_targets:
-                target_batch.append(self.data[sti+1:sti+1+self.future_len, :3])
-                target_batch_nan.append(self.data_nan[sti+1:sti+1+self.future_len, :3])
+                y_decode[k, :, :] = self.data[s_idx, t_idx:t_idx+self.decode_len, :self.n_dec_feature]
+                is_nan_decode[k, :, :] = self.data_mask[s_idx, t_idx:t_idx+self.decode_len, :self.n_dec_feature]
+
+        batch = {}
+        batch['x_encode'] = x_encode
+        batch['encode_len'] = encode_len
+        batch['y_decode'] = y_decode
+        batch['decode_len'] = decode_len
+        batch['is_nan_encode'] = is_nan_encode
+        batch['is_nan_decode'] = is_nan_decode
+        return batch
+
+
+
+    def build_batch1(self, idxes, pars={}):
+        with_targets = False
+        if 'with_targets' in pars:
+            with_targets = pars['with_targets']
+
+        #print('SeqLen = {}'.format(self.past_len))
+        data_batch = []
+        data_batch_mask = []
+        target_batch = []
+        target_batch_mask = []
+        data_len = []
+        for sti in idxes:
+            s_idx = sti[0]
+            t_idx = sti[1]
+            data_batch.append(self.data[s_idx, t_idx-self.encode_len:t_idx, :])
+            data_batch_mask.append(self.data_mask[s_idx, t_idx-self.encode_len:t_idx, :])
+            data_len.append(self.encode_len)
+
+            if with_targets:
+                target_batch.append(self.data[s_idx, t_idx:t_idx+self.decode_len, :3])
+                target_batch_mask.append(self.data_mask[s_idx, t_idx:t_idx+self.decode_len, :3])
 
         #print(len(data_batch), type(data_batch))
-        data_batch = np.asarray(data_batch, dtype=np.float32)
-        data_batch = np.nan_to_num(data_batch)
-        data_batch_nan = np.asarray(data_batch_nan, dtype=np.float32)
         if with_targets:
-            target_batch = np.asarray(target_batch, dtype=np.float32)
-            target_batch = np.nan_to_num(target_batch)
-            target_batch_nan = np.asarray(target_batch_nan, dtype=np.float32)
-            return data_batch, data_batch_nan, target_batch, target_batch_nan
-        return data_batch, data_batch_nan
+            return data_batch, data_batch_mask, target_batch, target_batch_mask
+        return data_batch, data_batch_mask, data_len
 
 
 

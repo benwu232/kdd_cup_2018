@@ -1,6 +1,10 @@
 import numpy as np
 from geopy.distance import geodesic
 
+DBG = 1
+
+DECODE_STEPS = 48
+
 bj_stations = [
     'aotizhongxin_aq', 'badaling_aq', 'beibuxinqu_aq', 'daxing_aq',
     'dingling_aq', 'donggaocun_aq', 'dongsi_aq', 'dongsihuan_aq',
