@@ -155,10 +155,10 @@ class TFBaseModel(object):
                         print()
 
                 # train step
-                train_batch_df = next(train_generator)
+                train_batch_dict = next(train_generator)
                 train_feed_dict = {
                     getattr(self, placeholder_name, None): data
-                    for placeholder_name, data in train_batch_df if hasattr(self, placeholder_name)
+                    for placeholder_name, data in train_batch_dict.items() if hasattr(self, placeholder_name)
                 }
 
                 train_feed_dict.update({self.learning_rate_var: self.learning_rate})

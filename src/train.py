@@ -10,7 +10,7 @@ if __name__ == '__main__':
 
 
     if DBG:
-        batch_size = 32
+        batch_size = 30
     else:
         batch_size = 64
 

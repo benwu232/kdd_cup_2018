@@ -367,11 +367,12 @@ class WaveNetEncDec(TFBaseModel):
 
         skip_outputs = tf.nn.relu(tf.concat(skip_outputs, axis=2))
         h = time_distributed_dense_layer(skip_outputs, 128, scope='dense-decode-1', activation=tf.nn.relu)
-        y_hat = time_distributed_dense_layer(h, self.n_dec_feature, scope='dense-decode-2')
+        y_hat = time_distributed_dense_layer(h, self.n_enc_feature, scope='dense-decode-2')
         return y_hat
 
     def decode(self, x, conv_inputs, features):
-        batch_size = tf.shape(x)[0]
+        #batch_size = tf.shape(x)[0]
+        batch_size = int(x.shape[0])
 
         # initialize state tensor arrays
         state_queues = []
@@ -385,7 +386,7 @@ class WaveNetEncDec(TFBaseModel):
             temporal_idx = tf.reshape(temporal_idx, [-1])
 
             idx = tf.stack([batch_idx, temporal_idx], axis=1)
-            slices = tf.reshape(tf.gather_nd(conv_input, idx), (batch_size, dilation, shape(conv_input, 2)))
+            slices = tf.reshape(tf.gather_nd(conv_input, idx), (batch_size, dilation, int(conv_input.shape[2])))
 
             layer_ta = tf.TensorArray(dtype=tf.float32, size=dilation + self.num_decode_steps)
             layer_ta = layer_ta.unstack(tf.transpose(slices, (1, 0, 2)))
@@ -452,7 +453,7 @@ class WaveNetEncDec(TFBaseModel):
 
             next_input = tf.cond(
                 finished,
-                lambda: tf.zeros([batch_size, 1], dtype=tf.float32),
+                lambda: tf.zeros([batch_size, self.n_enc_feature], dtype=tf.float32),
                 lambda: y_hat
             )
             next_elements_finished = (time >= self.decode_len - 1)
@@ -478,7 +479,9 @@ class WaveNetEncDec(TFBaseModel):
         )
 
         outputs_ta = returned[2]
-        y_hat = tf.transpose(outputs_ta.stack(), (1, 0, 2))
+        y_hat = outputs_ta.stack()
+        #y_hat = tf.reshape(y_hat, (-1, batch_size, self.n_enc_feature))
+        y_hat = tf.transpose(y_hat, (1, 0, 2))
         return y_hat
 
     def calculate_loss(self):
@@ -487,7 +490,8 @@ class WaveNetEncDec(TFBaseModel):
         y_hat_encode, conv_inputs = self.encode(x, features=self.encode_features)
         self.initialize_decode_params(x, features=self.decode_features)
         y_hat_decode = self.decode(y_hat_encode, conv_inputs, features=self.decode_features)
-        y_hat_decode = self.inverse_transform(tf.squeeze(y_hat_decode, 2), type=self.preprocess_type)
+        #y_hat_decode = self.inverse_transform(tf.squeeze(y_hat_decode, 2), type=self.preprocess_type)
+        y_hat_decode = self.inverse_transform(y_hat_decode, type=self.preprocess_type)
         y_hat_decode = tf.nn.relu(y_hat_decode)
 
         self.labels = self.y_decode
@@ -498,7 +502,7 @@ class WaveNetEncDec(TFBaseModel):
             'priors': self.x_encode,
             'labels': self.labels,
             'preds': self.preds,
-            'page_id': self.page_id,
+            #'page_id': self.page_id,
         }
 
         return self.loss

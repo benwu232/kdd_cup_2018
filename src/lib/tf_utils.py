@@ -93,6 +93,21 @@ def shape(tensor, dim=None):
         return tensor.shape.as_list()[dim]
 
 
+def sequence_smape1(y, y_hat, sequence_lengths, is_nan):
+    max_sequence_length = tf.shape(y)[1]
+    y = tf.cast(y, tf.float32)
+    smape = 200.0 * (tf.abs(y_hat - y) / (tf.abs(y) + tf.abs(y_hat)))
+
+    # ignore discontinuity
+    zero_loss = 2.0*tf.ones_like(smape)
+    nonzero_loss = smape
+    smape = tf.where(tf.logical_or(tf.equal(y, 0.0), tf.equal(y_hat, 0.0)), zero_loss, nonzero_loss)
+
+    sequence_mask = tf.cast(tf.sequence_mask(sequence_lengths, maxlen=max_sequence_length), tf.float32)
+    sequence_mask = sequence_mask*(1 - is_nan)
+    avg_smape = tf.reduce_sum(smape*sequence_mask) / tf.reduce_sum(sequence_mask)
+    return avg_smape
+
 def sequence_smape(y, y_hat, sequence_lengths, is_nan):
     #y_hat = y_hat[:, :, :n_feature]
     y_hat = y_hat[:, :, :y.shape[-1]]
@@ -105,8 +120,7 @@ def sequence_smape(y, y_hat, sequence_lengths, is_nan):
     nonzero_loss = smape
     smape = tf.where(tf.logical_or(tf.equal(y, 0.0), tf.equal(y_hat, 0.0)), zero_loss, nonzero_loss)
 
-    sequence_mask = tf.cast(tf.sequence_mask(sequence_lengths, maxlen=max_sequence_length), tf.float32)
-    sequence_mask = sequence_mask*(1 - is_nan)
+    sequence_mask = 1.0 - is_nan
     avg_smape = tf.reduce_sum(smape*sequence_mask) / tf.reduce_sum(sequence_mask)
     return avg_smape
 
