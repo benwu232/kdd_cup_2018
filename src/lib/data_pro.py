@@ -19,6 +19,21 @@ def read_bj_aq():
     print(len(bj_aq))
     return bj_aq
 
+def read_ld_aq():
+    ld_aq = pd.read_csv('../input/london_aq.csv')
+    ld_aq.columns = ['StationId', 'UtcTime', 'PM25', 'PM10', 'NO2']
+    print(len(ld_aq))
+
+    ld_aq1 = pd.read_csv('../input/ld_aq_ex.csv')
+    ld_aq1.drop(['id'], axis=1, inplace=True)
+    ld_aq1.columns = ['StationId', 'UtcTime', 'PM25', 'PM10', 'NO2', 'CO', 'O3', 'SO2']
+    print(len(ld_aq1))
+
+    ld_aq = ld_aq.append(ld_aq1)
+    ld_aq.drop_duplicates(subset=['StationId', 'UtcTime'], inplace=True)
+    print(len(ld_aq))
+    return ld_aq
+
 #qianmen_aq = read_bj_aq[read_bj_aq['StationId'] == 'qianmen_aq']
 
 def check_stations(df):
@@ -72,39 +87,55 @@ def build_df1(bj_aq):
         print(st, len(data_dict[st]))
     return data_dict
 
-def build_data_dict(bj_aq):
+def build_data_dict(df_aq):
+    #Get station list
+    st_list = list(df_aq.StationId.unique())
+    print(st_list)
+    print('Station number: {}'.format(len(st_list)))
+    #remove the illegal names
+    for item in st_list:
+        if type(item) != str:
+            st_list.remove(item)
+
     data_dict = {}
-    for key in bj_stations:
+    for key in st_list:
         data_dict[key] = []
-    bj_aq.UtcTime = pd.to_datetime(bj_aq.UtcTime)
+    df_aq.UtcTime = pd.to_datetime(df_aq.UtcTime)
     #bj_aq.UtcTime.apply(to_pydt)
     start = dt.datetime(year=2017, month=1, day=1, hour=0)
-    end = pd.to_datetime(bj_aq.UtcTime.iloc[-1]).to_pydatetime()
+    end = pd.to_datetime(df_aq.UtcTime.iloc[-1]).to_pydatetime()
     for st in data_dict:
-        sub_df = bj_aq[bj_aq.StationId==st]
-        print('Before insert missing rows: {}, {}'.format(st, len(sub_df)))
+        #st = 'LH0'
+        sub_df = df_aq[df_aq.StationId == st]
+        old_len = len(sub_df)
+        #print('\nBefore insert missing rows: {}, {}'.format(st, len(sub_df)))
         df_cnt = 0
         t = start
 
         while t <= end:
             ts = dt2pdts(t)
             #row = sub_df[sub_df.UtcTime==ts]
-            sub_row = sub_df.iloc[df_cnt]
-            if ts < sub_row.UtcTime:
+            if df_cnt >= len(sub_df):
                 row_dict = {'StationId': st, 'UtcTime': ts, 'PM25': np.nan, 'PM10': np.nan, 'NO2': np.nan, 'CO': np.nan, 'O3': np.nan, 'SO2': np.nan}
                 t += dt.timedelta(hours=1)
-            elif ts == sub_row.UtcTime:
-                row_dict = sub_row.to_dict()
-                t += dt.timedelta(hours=1)
-                df_cnt += 1
-                #if df_cnt % 1000 == 0:
-                #    print(df_cnt)
             else:
-                print('should not run here!')
-                exit()
+                sub_row = sub_df.iloc[df_cnt]
+                if ts < sub_row.UtcTime:
+                    row_dict = {'StationId': st, 'UtcTime': ts, 'PM25': np.nan, 'PM10': np.nan, 'NO2': np.nan, 'CO': np.nan, 'O3': np.nan, 'SO2': np.nan}
+                    t += dt.timedelta(hours=1)
+                elif ts == sub_row.UtcTime:
+                    row_dict = sub_row.to_dict()
+                    t += dt.timedelta(hours=1)
+                    df_cnt += 1
+                    #if df_cnt % 1000 == 0:
+                    #    print(df_cnt)
+                else:
+                    print('should not run here!')
+                    exit()
             data_dict[st].append(row_dict)
         data_dict[st] = pd.DataFrame(data_dict[st])
-        print('After insert missing rows: {}, {}'.format(st, len(data_dict[st])))
+        #print('After insert missing rows: {}, {}'.format(st, len(data_dict[st])))
+        print('\nStation "{}", insert missing rows, {} ==>> {}'.format(st, old_len, len(data_dict[st])))
 
     return data_dict
 
@@ -129,6 +160,26 @@ def build_bj_st():
         data_list.append(data_dict[st][['PM25', 'PM10', 'O3', 'CO', 'NO2', 'SO2']])
     np_data = np.stack(data_list)
     return np_data
+
+
+#load csv, do some processing, and save to pkl
+def load_data():
+    #axis0: 0, bj; 1, ld
+    #axis1: 0, air quality; 1, meterology
+    data = [[], []]
+
+    bj_aq = read_bj_aq()
+    #check_stations(bj_aq)
+    bj_aq = build_data_dict(bj_aq)
+    data[0].append(bj_aq)
+
+    ld_aq = read_ld_aq()
+    #check_stations(ld_aq)
+    ld_aq = build_data_dict(ld_aq)
+    data[1].append(ld_aq)
+
+    save_dump(data, '../input/data.pkl')
+    return data
 
 
 def batch_gen(indices, build_batch, bb_pars={},
@@ -161,8 +212,9 @@ def batch_gen(indices, build_batch, bb_pars={},
 #city: 0 - Beijing; 1 - London
 #type: 0 - station, 1 - grid
 class DataBuilder(object):
-    def __init__(self, batch_size=32):
+    def __init__(self, pars):
         #self.data = [[] for _ in (0, 1)]
+        #self.data = load_dump('../input/data.pkl')
         self.data = build_bj_st()
         self.data_mask = np.isnan(self.data).astype(int)
         #self.data_mask = np.asarray(self.data_mask, dtype=np.float32)
@@ -172,21 +224,24 @@ class DataBuilder(object):
         self.time_len = self.data.shape[1]
         self.n_enc_feature = self.data.shape[-1]
         self.n_dec_feature = 3
-        self.max_encode_len = 256
-        self.encode_len = 128
+        self.max_encode_len = 240
+        self.encode_len = pars['encode_len']
         self.decode_len = 48
-        self.val_to_end = 500
-        self.batch_size = batch_size
+        self.val_to_end = pars['val_to_end']
+        self.batch_size = pars['batch_size']
         self.build_idxes()
-        self.train_bb = batch_gen(self.train_idxes, self.build_batch, batch_size=self.batch_size,
+        self.train_bb = batch_gen(self.train_idxes, self.build_batch, bb_pars={'with_targets': True}, batch_size=self.batch_size,
                                   shuffle=True, forever=True, drop_last=True)
-        self.val_bb = batch_gen(self.val_idxes, self.build_batch, batch_size=self.batch_size,
+        self.val_bb = batch_gen(self.val_idxes, self.build_batch, bb_pars={'with_targets': True}, batch_size=self.batch_size,
                                   shuffle=True, forever=True, drop_last=True)
+
+    def make_aq_data(self):
+        pass
 
     def build_idxes(self):
         self.idxes = []
         for s_idx in range(self.data.shape[0]):
-            for t_idx in range(self.encode_len, self.data.shape[1]-self.decode_len):
+            for t_idx in range(self.encode_len, self.time_len-self.decode_len):
                 self.idxes.append((s_idx, t_idx))
 
         self.train_idxes = []
@@ -201,19 +256,21 @@ class DataBuilder(object):
 
         self.test_idxes = []
         for s_idx in range(self.data.shape[0]):
-            self.val_idxes.append((s_idx, self.time_len))
+            self.test_idxes.append((s_idx, self.time_len))
+
+        pass
 
     def build_batch(self, idxes, pars={}):
         with_targets = False
         if 'with_targets' in pars:
             with_targets = pars['with_targets']
 
-        x_encode = np.zeros([self.batch_size, self.max_encode_len, self.n_enc_feature])
+        x_encode = np.zeros([self.batch_size, self.encode_len, self.n_enc_feature], dtype=np.float32)
         is_nan_encode = np.zeros_like(x_encode)
-        y_decode = np.zeros([self.batch_size, self.decode_len, self.n_dec_feature])
+        y_decode = np.zeros([self.batch_size, self.decode_len, self.n_dec_feature], dtype=np.float32)
         is_nan_decode = np.zeros_like(y_decode)
-        encode_len = np.zeros([self.batch_size])
-        decode_len = np.zeros([self.batch_size])
+        encode_len = np.zeros([self.batch_size], dtype=np.int32)
+        decode_len = np.zeros([self.batch_size], dtype=np.int32)
 
         #print('SeqLen = {}'.format(self.past_len))
         for k, sti in enumerate(idxes):

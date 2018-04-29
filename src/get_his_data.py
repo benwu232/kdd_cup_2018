@@ -20,7 +20,7 @@ ex_files = [
     '{}ld_mog_ex.csv'.format(out_dir),
 ]
 
-def get_data(end='2018-04-20-23'):
+def get_his_data(end='2018-04-20-23'):
     for k, fn in enumerate(ex_files):
         df = pd.read_csv(fn)
         last_time = pd.to_datetime(df.time.iloc[-1]).to_datetime()
@@ -64,4 +64,4 @@ def get_data420(start='2018-02-01-0', end='2018-04-20-23'):
 
 if __name__ == '__main__':
     #get_data420(end='2018-04-20-23')
-    get_data(end='2018-08-20-23')
+    get_his_data(end='2018-08-20-23')

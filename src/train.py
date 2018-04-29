@@ -2,47 +2,51 @@ import os
 
 
 from lib.data_pro import DataBuilder, batch_gen
-from lib.wavenet import WaveNetEncDec
 from lib.define import *
+from lib.framework import Seq2Seq
 
 if __name__ == '__main__':
     base_dir = '../'
-
-
     if DBG:
-        batch_size = 30
-    else:
         batch_size = 64
+    else:
+        batch_size = 1024
 
-    dg = DataBuilder(batch_size=batch_size)
-    nn = WaveNetEncDec(
-        reader=dg,
-        log_dir=os.path.join(base_dir, 'logs'),
-        checkpoint_dir=os.path.join(base_dir, 'checkpoints'),
-        prediction_dir=os.path.join(base_dir, 'predictions'),
-        optimizer='adam',
-        learning_rate=.001,
-        batch_size=batch_size,
-        num_training_steps=200000,
-        early_stopping_steps=5000,
-        warm_start_init_step=0,
-        regularization_constant=0.0,
-        keep_prob=0.6,
-        enable_parameter_averaging=False,
-        num_restarts=2,
-        min_steps_to_checkpoint=500,
-        log_interval=10,
-        num_validation_batches=1,
-        grad_clip=20,
-        residual_channels=32,
-        skip_channels=32,
-        dilations=[2**i for i in range(8)]*1,
-        filter_widths=[2 for i in range(8)]*1,
-        num_decode_steps=DECODE_STEPS,
-    )
+    pars = {
+        'with_tblog': True,
+        'enc_file': None,
+        'dec_file': None,
+        'encode_len': 720,
+        'val_to_end': 800,
+        #'encode_len': 960,
+        #'val_to_end': 1080,
+        'clip': 10,
+        'lr': 0.001,
+        'batch_size': batch_size,
+        'n_features': 6,
+        'n_hidden': 100,
+        'n_enc_layers': 1,
+        'n_dec_layers': 1,
+        'dropout': 0.3,
+        'loss_type': 'SMAPE',
+        'encoder': {
+            'optimizer': {'type': 'Adam', 'beta1': 0.9, 'beta2': 0.999, 'epsilon': 1e-8, 'l2_scale': 1e-2, 'amsgrad': True},
+            #'optimizer': {'type': 'SGD', 'momentum': 0.9, 'nesterov': False, 'dampening': 0.0, 'epsilon': 1e-8, 'l2_scale': 1e-2},
+            #'optimizer': {'type': 'AdamW', 'beta1': 0.9, 'beta2': 0.999, 'epsilon': 1e-8, 'l2_scale': 1e-4},
+        },
+        'decoder': {
+            'optimizer': {'type': 'Adam', 'beta1': 0.9, 'beta2': 0.999, 'epsilon': 1e-8, 'l2_scale': 1e-2, 'amsgrad': True},
+            #'optimizer': {'type': 'SGD', 'momentum': 0.9, 'nesterov': False, 'dampening': 0.0, 'epsilon': 1e-8, 'l2_scale': 1e-2},
+            #'optimizer': {'type': 'AdamW', 'beta1': 0.9, 'beta2': 0.999, 'epsilon': 1e-8, 'l2_scale': 1e-4},
+        },
+        'teacher_forcing_ratio': 0.0,
+    }
+
+    dg = DataBuilder(pars)
+    nn = Seq2Seq(pars)
 
 
-    nn.fit()
-    nn.restore()
-    nn.predict(batch_size)
+    nn.fit(dg.train_bb, dg.val_bb)
+    #nn.restore()
+    #nn.predict(batch_size)
 
