@@ -221,6 +221,9 @@ class DataBuilder(object):
     def __init__(self, pars):
         #self.data = build_bj_st()
         self.raw_data = load_dump('../input/data.pkl')
+        self.fixed_feature_list = ['CityId', 'X', 'Y', 'Day', 'Month', 'Hour', 'Weekday', 'Weekofyear']
+        self.dynamic_feature_list = ['PM25', 'PM10', 'O3', 'CO', 'NO2', 'SO2']
+        self.n_fixed_feature = len(self.fixed_feature_list)
         self.st_list = []
         self.st_list.append(bj_stations)
         self.st_list.append(ld_stations)
@@ -230,9 +233,7 @@ class DataBuilder(object):
         #todo: need to add other data preprocessing, e.g. 9997, a number which is too big
         self.time_len = self.dynamic_features.shape[1]
         self.n_dynamic_feature = self.dynamic_features.shape[-1]
-        self.n_fixed_feature = 3
         self.n_dec_feature = 6
-        self.max_encode_len = 240
         self.encode_len = pars['encode_len']
         self.decode_len = 48
         self.val_to_end = pars['val_to_end']
@@ -260,18 +261,43 @@ class DataBuilder(object):
                 #print(st, pos)
                 self.pos_list[city].append(pos)
 
+    def add_time_features(self, st_data):
+        extra = pd.DataFrame()
+        ts_list = []
+        ts_idx = st_data.UtcTime.iloc[-1]
+        station_id = st_data.StationId.iloc[-1]
+        for k in range(48):
+            ts_idx += pd.Timedelta(hours=1)
+            ts_list.append(ts_idx)
+        extra['UtcTime'] = np.array(ts_list)
+        columns = list(st_data.columns)
+        extra['StationId'] = station_id
+        columns.remove('UtcTime')
+        columns.remove('StationId')
+        for col in columns:
+            extra[col] = np.nan
+        st_data = st_data.append(extra)
+        st_data['Day'] = st_data.UtcTime.dt.day
+        st_data['Month'] = st_data.UtcTime.dt.month
+        st_data['Hour'] = st_data.UtcTime.dt.hour
+        st_data['Weekday'] = st_data.UtcTime.dt.weekday
+        st_data['Weekofyear'] = st_data.UtcTime.dt.weekofyear
+        return st_data
+
+
     def make_aq_data(self):
         dynamic_features = []
         fixed_features = []
         for city in (0, 1):
             data_dict = self.raw_data[city][0]
             for k, st in enumerate(data_dict):
+                data_dict[st] = self.add_time_features(data_dict[st])
                 #print(st)
                 data_dict[st]['CityId'] = city
                 data_dict[st]['X'] = self.pos_list[city][k][0]
                 data_dict[st]['Y'] = self.pos_list[city][k][1]
-                dynamic_features.append(data_dict[st][['PM25', 'PM10', 'O3', 'CO', 'NO2', 'SO2']])
-                fixed_features.append(data_dict[st][['CityId', 'X', 'Y']])
+                dynamic_features.append(data_dict[st][self.dynamic_feature_list])
+                fixed_features.append(data_dict[st][self.fixed_feature_list])
         self.dynamic_features = np.stack(dynamic_features)
         self.dynamic_features_mask = np.isnan(self.dynamic_features).astype(int)
         self.dynamic_features = np.asarray(self.dynamic_features, dtype=np.float32)
@@ -313,6 +339,7 @@ class DataBuilder(object):
         enc_fixed = np.zeros([batch_size, self.encode_len, self.n_fixed_feature], dtype=np.float32)
         y_decode = np.zeros([batch_size, self.decode_len, self.n_dec_feature], dtype=np.float32)
         is_nan_decode = np.zeros_like(y_decode)
+        dec_fixed = np.zeros([batch_size, self.decode_len, self.n_fixed_feature], dtype=np.float32)
         encode_len = np.zeros([batch_size], dtype=np.int32)
         decode_len = np.zeros([batch_size], dtype=np.int32)
 
@@ -322,50 +349,25 @@ class DataBuilder(object):
             t_idx = sti[1]
             enc_dynamic[k, :self.encode_len, :] = self.dynamic_features[s_idx, t_idx - self.encode_len:t_idx, :]
             enc_dynamic_nan[k, :self.encode_len, :] = self.dynamic_features_mask[s_idx, t_idx - self.encode_len:t_idx, :]
+            enc_fixed[k, :self.encode_len, :] = self.fixed_features[s_idx, t_idx - self.encode_len:t_idx, :]
             encode_len[k] = self.encode_len
 
             if with_targets:
                 y_decode[k, :, :] = self.dynamic_features[s_idx, t_idx:t_idx + self.decode_len, :self.n_dec_feature]
                 is_nan_decode[k, :, :] = self.dynamic_features_mask[s_idx, t_idx:t_idx + self.decode_len, :self.n_dec_feature]
+                dec_fixed[k, :, :] = self.fixed_features[s_idx, t_idx:t_idx + self.decode_len, :]
 
         batch = {}
         batch['enc_fixed'] = enc_fixed
         batch['enc_dynamic'] = enc_dynamic
         batch['encode_len'] = encode_len
-        batch['y_decode'] = y_decode
         batch['decode_len'] = decode_len
         batch['enc_dynamic_nan'] = enc_dynamic_nan
+        batch['y_decode'] = y_decode
         batch['is_nan_decode'] = is_nan_decode
+        batch['dec_fixed'] = dec_fixed
         return batch
 
-
-
-    def build_batch1(self, idxes, pars={}):
-        with_targets = False
-        if 'with_targets' in pars:
-            with_targets = pars['with_targets']
-
-        #print('SeqLen = {}'.format(self.past_len))
-        data_batch = []
-        data_batch_mask = []
-        target_batch = []
-        target_batch_mask = []
-        data_len = []
-        for sti in idxes:
-            s_idx = sti[0]
-            t_idx = sti[1]
-            data_batch.append(self.dynamic_features[s_idx, t_idx - self.encode_len:t_idx, :])
-            data_batch_mask.append(self.dynamic_features_mask[s_idx, t_idx - self.encode_len:t_idx, :])
-            data_len.append(self.encode_len)
-
-            if with_targets:
-                target_batch.append(self.dynamic_features[s_idx, t_idx:t_idx + self.decode_len, :3])
-                target_batch_mask.append(self.dynamic_features_mask[s_idx, t_idx:t_idx + self.decode_len, :3])
-
-        #print(len(data_batch), type(data_batch))
-        if with_targets:
-            return data_batch, data_batch_mask, target_batch, target_batch_mask
-        return data_batch, data_batch_mask, data_len
 
 
 

@@ -38,12 +38,13 @@ class EncDec(object):
     def __init__(self, model_pars):
         self.n_dynamic_features = model_pars['n_dynamic_features']*3
         self.n_fixed_features = model_pars['n_fixed_features']
-        self.n_features = self.n_dynamic_features + self.n_fixed_features
+        self.n_enc_input = self.n_dynamic_features + self.n_fixed_features
         self.n_hidden = model_pars['n_hidden']
         self.n_enc_layers = model_pars['n_enc_layers']
         self.n_dec_layers = model_pars['n_dec_layers']
         self.dropo = model_pars['dropout']
         self.n_out = 6
+        self.n_dec_input = self.n_out + self.n_fixed_features
 
         if model_pars['enc_file'] is None:
             self.encoder = self.init_encoder()
@@ -109,11 +110,11 @@ class EncDec(object):
             self.criterion = SmapeLoss()
 
     def init_encoder(self):
-        self.encoder = EncoderRnn(self.n_features, self.n_hidden, self.n_enc_layers, dropout=self.dropo)
+        self.encoder = EncoderRnn(self.n_enc_input, self.n_hidden, self.n_enc_layers, dropout=self.dropo)
         return self.encoder
 
     def init_decoder(self):
-        self.decoder = DecoderRnn(self.n_hidden, self.n_out, self.n_dec_layers, dropout=self.dropo)
+        self.decoder = DecoderRnn(self.n_dec_input, self.n_hidden, self.n_out, self.n_dec_layers, dropout=self.dropo)
         return self.decoder
 
     def save_model(self, model_prefix):
@@ -436,13 +437,16 @@ class Seq2Seq(EncDec):
         self.teacher_forcing_ratio = model_pars['teacher_forcing_ratio']
 
     def transform(self, x):
+        #x = torch.log1p(x)
         self.x_mean = torch.mean(x, dim=1, keepdim=True)
         x_trans = x - self.x_mean
         x_mean = self.x_mean.repeat((1, x.shape[1], 1))
         return x_trans, x_mean
 
     def inv_transform(self, x):
-        return x + self.x_mean
+        y = x + self.x_mean
+        #y = torch.expm1(y)
+        return y
 
     def train_batch(self, batch):
         self.enable_train(True)
@@ -463,6 +467,8 @@ class Seq2Seq(EncDec):
             enc_dynamic_nan.requires_grad_()
             is_nan_decode = Variable(torch.from_numpy(batch['is_nan_decode'])).to(device)
             is_nan_decode.requires_grad_()
+            dec_fixed = torch.from_numpy(batch['dec_fixed']).to(device)
+            dec_fixed.requires_grad_()
             enc_dynamic_trans, enc_dynamic_mean = self.transform(enc_dynamic)
             data_batch = torch.cat([enc_fixed, enc_dynamic_trans, enc_dynamic_nan, enc_dynamic_mean], dim=2)
 
@@ -489,7 +495,7 @@ class Seq2Seq(EncDec):
                 if use_teacher_forcing:
                     decoder_input = target_batches[:, -1, :].view(batch_size, 1, -1)
                 else:
-                    decoder_input = decoder_output      # Next input is current prediction
+                    decoder_input = torch.cat([decoder_output, dec_fixed[:, -1, :].unsqueeze(1)], dim=2)      # Next input is current prediction
 
             # Loss calculation and backpropagation
             predictions = all_decoder_outputs.permute(1, 0, 2)
@@ -521,6 +527,7 @@ class Seq2Seq(EncDec):
             enc_fixed = (torch.from_numpy(batch['enc_fixed'])).to(device)
             enc_dynamic_nan = (torch.from_numpy(batch['enc_dynamic_nan'])).to(device)
             is_nan_decode = (torch.from_numpy(batch['is_nan_decode'])).to(device)
+            dec_fixed = torch.from_numpy(batch['dec_fixed']).to(device)
             enc_dynamic_trans, enc_dynamic_mean = self.transform(enc_dynamic)
             data_batch = torch.cat([enc_fixed, enc_dynamic_trans, enc_dynamic_nan, enc_dynamic_mean], dim=2)
 
@@ -543,7 +550,7 @@ class Seq2Seq(EncDec):
 
                 #print(all_decoder_outputs[t].size(), decoder_output[0].size())
                 all_decoder_outputs[t] = decoder_output[0]
-                decoder_input = decoder_output      # Next input is current prediction
+                decoder_input = torch.cat([decoder_output, dec_fixed[:, -1, :].unsqueeze(1)], dim=2)      # Next input is current prediction
 
             # Loss calculation and backpropagation
             predictions = all_decoder_outputs.permute(1, 0, 2)

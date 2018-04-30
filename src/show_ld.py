@@ -16,7 +16,7 @@ for st in raw_data[1][0]:
     data = raw_data[1][0][st]
     mplt.title(st)
     time = list(range(len(data)))
-    mplt.plot(time, data.PM25, 'r', time, data.PM10, 'g')
+    mplt.plot(time, np.log(data.PM25.values), 'r', time, np.log(data.PM10.values), 'g')
     mplt.show()
 
 pass

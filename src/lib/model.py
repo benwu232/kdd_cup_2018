@@ -22,10 +22,10 @@ class EncoderRnn(nn.Module):
 
 
 class DecoderRnn(nn.Module):
-    def __init__(self, hidden_size, output_size, n_layers=1, dropout=0.1, bidirectional=False):
+    def __init__(self, input_size, hidden_size, output_size, n_layers=1, dropout=0.1, bidirectional=False):
         super().__init__()
 
-        self.input_size = output_size
+        self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.n_layers = n_layers

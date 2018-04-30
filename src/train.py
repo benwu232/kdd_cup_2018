@@ -24,7 +24,7 @@ if __name__ == '__main__':
         'lr': 0.001,
         'batch_size': batch_size,
         'n_dynamic_features': 6,
-        'n_fixed_features': 3,
+        'n_fixed_features': 8,
         'n_hidden': 100,
         'n_enc_layers': 1,
         'n_dec_layers': 1,
