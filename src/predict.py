@@ -24,6 +24,49 @@ def preds_to_df(preds):
     #df = df['test_id', 'PM2.5', 'PM10', 'O3']
     return df
 
+def predict(enc_file, dec_file, out_file):
+    pars = {
+        'with_tblog': False,
+        'enc_file': enc_file,
+        'dec_file': dec_file,
+        'encode_len': 720,
+        'val_to_end': 800,
+        #'encode_len': 960,
+        #'val_to_end': 1080,
+        'clip': 10,
+        'lr': 0.001,
+        'batch_size': 32,
+        'n_dynamic_features': 6,
+        'n_fixed_features': 3,
+        'n_hidden': 100,
+        'n_enc_layers': 1,
+        'n_dec_layers': 1,
+        'dropout': 0.3,
+        'loss_type': 'SMAPE',
+        'encoder': {
+            'optimizer': {'type': 'Adam', 'beta1': 0.9, 'beta2': 0.999, 'epsilon': 1e-8, 'l2_scale': 1e-2, 'amsgrad': True},
+            #'optimizer': {'type': 'SGD', 'momentum': 0.9, 'nesterov': False, 'dampening': 0.0, 'epsilon': 1e-8, 'l2_scale': 1e-2},
+            #'optimizer': {'type': 'AdamW', 'beta1': 0.9, 'beta2': 0.999, 'epsilon': 1e-8, 'l2_scale': 1e-4},
+        },
+        'decoder': {
+            'optimizer': {'type': 'Adam', 'beta1': 0.9, 'beta2': 0.999, 'epsilon': 1e-8, 'l2_scale': 1e-2, 'amsgrad': True},
+            #'optimizer': {'type': 'SGD', 'momentum': 0.9, 'nesterov': False, 'dampening': 0.0, 'epsilon': 1e-8, 'l2_scale': 1e-2},
+            #'optimizer': {'type': 'AdamW', 'beta1': 0.9, 'beta2': 0.999, 'epsilon': 1e-8, 'l2_scale': 1e-4},
+        },
+        'teacher_forcing_ratio': 0.0,
+    }
+
+    dg = DataBuilder(pars)
+    nn = Seq2Seq(pars)
+
+    print('predicting ...')
+    preds = nn.predict(dg.test_bb, DECODE_STEPS)
+    print('converting to DataFrame ...')
+    pdf = preds_to_df(preds)
+    print('converting to CSV ...')
+    pdf.to_csv('../submit/{}'.format(out_file), encoding='utf-8', index=False)
+
+
 
 if __name__ == '__main__':
     base_dir = '../'

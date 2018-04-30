@@ -566,6 +566,7 @@ class Seq2Seq(EncDec):
             enc_fixed = (torch.from_numpy(batch['enc_fixed'])).to(device)
             enc_dynamic_nan = (torch.from_numpy(batch['enc_dynamic_nan'])).to(device)
             is_nan_decode = (torch.from_numpy(batch['is_nan_decode'])).to(device)
+            dec_fixed = torch.from_numpy(batch['dec_fixed']).to(device)
             enc_dynamic_trans, enc_dynamic_mean = self.transform(enc_dynamic)
             data_batch = torch.cat([enc_fixed, enc_dynamic_trans, enc_dynamic_nan, enc_dynamic_mean], dim=2)
 
@@ -587,7 +588,7 @@ class Seq2Seq(EncDec):
 
                 #print(all_decoder_outputs[t].size(), decoder_output[0].size())
                 all_decoder_outputs[t] = decoder_output[0]
-                decoder_input = decoder_output      # Next input is current prediction
+                decoder_input = torch.cat([decoder_output, dec_fixed[:, -1, :].unsqueeze(1)], dim=2)      # Next input is current prediction
 
             # Loss calculation and backpropagation
             predictions = all_decoder_outputs.permute(1, 0, 2)
