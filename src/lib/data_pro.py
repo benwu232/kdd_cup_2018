@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import datetime as dt
 import pickle
+from collections import OrderedDict
 from lib.define import *
 
 def read_bj_aq():
@@ -87,17 +88,22 @@ def build_df1(bj_aq):
         print(st, len(data_dict[st]))
     return data_dict
 
-def build_data_dict(df_aq):
-    #Get station list
-    st_list = list(df_aq.StationId.unique())
-    print(st_list)
-    print('Station number: {}'.format(len(st_list)))
-    #remove the illegal names
-    for item in st_list:
-        if type(item) != str:
-            st_list.remove(item)
+def build_data_dict(df_aq, city='bj'):
+    ##Get station list
+    #st_list = list(df_aq.StationId.unique())
+    ##remove the illegal names
+    #for item in st_list:
+    #    if type(item) != str:
+    #        st_list.remove(item)
+    #st_list.sort()
+    #print(st_list)
+    #print('Station number: {}'.format(len(st_list)))
+    if city == 'bj':
+        st_list = bj_stations
+    else:
+        st_list = ld_stations
 
-    data_dict = {}
+    data_dict = OrderedDict()
     for key in st_list:
         data_dict[key] = []
     df_aq.UtcTime = pd.to_datetime(df_aq.UtcTime)
@@ -170,12 +176,12 @@ def load_data():
 
     bj_aq = read_bj_aq()
     #check_stations(bj_aq)
-    bj_aq = build_data_dict(bj_aq)
+    bj_aq = build_data_dict(bj_aq, city='bj')
     data[0].append(bj_aq)
 
     ld_aq = read_ld_aq()
     #check_stations(ld_aq)
-    ld_aq = build_data_dict(ld_aq)
+    ld_aq = build_data_dict(ld_aq, city='ld')
     data[1].append(ld_aq)
 
     save_dump(data, '../input/data.pkl')
@@ -213,17 +219,19 @@ def batch_gen(indices, build_batch, bb_pars={},
 #type: 0 - station, 1 - grid
 class DataBuilder(object):
     def __init__(self, pars):
-        #self.data = [[] for _ in (0, 1)]
-        #self.data = load_dump('../input/data.pkl')
-        self.data = build_bj_st()
-        self.data_mask = np.isnan(self.data).astype(int)
-        #self.data_mask = np.asarray(self.data_mask, dtype=np.float32)
-        self.data = np.asarray(self.data, dtype=np.float32)
-        self.data = np.nan_to_num(self.data)
+        #self.data = build_bj_st()
+        self.raw_data = load_dump('../input/data.pkl')
+        self.st_list = []
+        self.st_list.append(bj_stations)
+        self.st_list.append(ld_stations)
+        self.cal_pos_info()
+        self.make_aq_data()
+
         #todo: need to add other data preprocessing, e.g. 9997, a number which is too big
-        self.time_len = self.data.shape[1]
-        self.n_enc_feature = self.data.shape[-1]
-        self.n_dec_feature = 3
+        self.time_len = self.dynamic_features.shape[1]
+        self.n_dynamic_feature = self.dynamic_features.shape[-1]
+        self.n_fixed_feature = 3
+        self.n_dec_feature = 6
         self.max_encode_len = 240
         self.encode_len = pars['encode_len']
         self.decode_len = 48
@@ -234,28 +242,62 @@ class DataBuilder(object):
                                   shuffle=True, forever=True, drop_last=True)
         self.val_bb = batch_gen(self.val_idxes, self.build_batch, bb_pars={'with_targets': True}, batch_size=self.batch_size,
                                   shuffle=True, forever=True, drop_last=True)
+        self.test_bb = batch_gen(self.test_idxes, self.build_batch, bb_pars={}, batch_size=self.batch_size,
+                                shuffle=False, forever=False, drop_last=False)
+
+    def cal_pos_info(self):
+        self.pos_list = []
+        st_ll = []
+        st_ll.append(pd.read_csv('../input/Beijing_AirQuality_Stations_cn.csv'))
+        st_ll.append(pd.read_csv('../input/London_AirQuality_Stations.csv'))
+        for city in (0, 1):
+            self.pos_list.append([])
+            for st in self.st_list[city]:
+                row = st_ll[city][st_ll[city]['StationId']==st]
+                longitude = row['Longitude'].values[0]
+                latitude = row['Latitude'].values[0]
+                pos = cal_pos((latitude, longitude), origin_list[city])
+                #print(st, pos)
+                self.pos_list[city].append(pos)
 
     def make_aq_data(self):
-        pass
+        dynamic_features = []
+        fixed_features = []
+        for city in (0, 1):
+            data_dict = self.raw_data[city][0]
+            for k, st in enumerate(data_dict):
+                #print(st)
+                data_dict[st]['CityId'] = city
+                data_dict[st]['X'] = self.pos_list[city][k][0]
+                data_dict[st]['Y'] = self.pos_list[city][k][1]
+                dynamic_features.append(data_dict[st][['PM25', 'PM10', 'O3', 'CO', 'NO2', 'SO2']])
+                fixed_features.append(data_dict[st][['CityId', 'X', 'Y']])
+        self.dynamic_features = np.stack(dynamic_features)
+        self.dynamic_features_mask = np.isnan(self.dynamic_features).astype(int)
+        self.dynamic_features = np.asarray(self.dynamic_features, dtype=np.float32)
+        self.dynamic_features = np.nan_to_num(self.dynamic_features)
+
+        self.fixed_features = np.stack(fixed_features)
+        self.fixed_features = np.asarray(self.fixed_features, dtype=np.float32)
 
     def build_idxes(self):
         self.idxes = []
-        for s_idx in range(self.data.shape[0]):
+        for s_idx in range(self.dynamic_features.shape[0]):
             for t_idx in range(self.encode_len, self.time_len-self.decode_len):
                 self.idxes.append((s_idx, t_idx))
 
         self.train_idxes = []
-        for s_idx in range(self.data.shape[0]):
+        for s_idx in range(self.dynamic_features.shape[0]):
             for t_idx in range(self.encode_len, self.time_len-self.decode_len-self.val_to_end):
                 self.train_idxes.append((s_idx, t_idx))
 
         self.val_idxes = []
-        for s_idx in range(self.data.shape[0]):
+        for s_idx in range(self.dynamic_features.shape[0]):
             for t_idx in range(self.time_len-self.val_to_end-self.decode_len, self.time_len-self.decode_len):
                 self.val_idxes.append((s_idx, t_idx))
 
         self.test_idxes = []
-        for s_idx in range(self.data.shape[0]):
+        for s_idx in range(48):
             self.test_idxes.append((s_idx, self.time_len))
 
         pass
@@ -265,31 +307,34 @@ class DataBuilder(object):
         if 'with_targets' in pars:
             with_targets = pars['with_targets']
 
-        x_encode = np.zeros([self.batch_size, self.encode_len, self.n_enc_feature], dtype=np.float32)
-        is_nan_encode = np.zeros_like(x_encode)
-        y_decode = np.zeros([self.batch_size, self.decode_len, self.n_dec_feature], dtype=np.float32)
+        batch_size = len(idxes)
+        enc_dynamic = np.zeros([batch_size, self.encode_len, self.n_dynamic_feature], dtype=np.float32)
+        enc_dynamic_nan = np.zeros_like(enc_dynamic)
+        enc_fixed = np.zeros([batch_size, self.encode_len, self.n_fixed_feature], dtype=np.float32)
+        y_decode = np.zeros([batch_size, self.decode_len, self.n_dec_feature], dtype=np.float32)
         is_nan_decode = np.zeros_like(y_decode)
-        encode_len = np.zeros([self.batch_size], dtype=np.int32)
-        decode_len = np.zeros([self.batch_size], dtype=np.int32)
+        encode_len = np.zeros([batch_size], dtype=np.int32)
+        decode_len = np.zeros([batch_size], dtype=np.int32)
 
         #print('SeqLen = {}'.format(self.past_len))
         for k, sti in enumerate(idxes):
             s_idx = sti[0]
             t_idx = sti[1]
-            x_encode[k, :self.encode_len, :] = self.data[s_idx, t_idx-self.encode_len:t_idx, :]
-            is_nan_encode[k, :self.encode_len, :] = self.data_mask[s_idx, t_idx-self.encode_len:t_idx, :]
+            enc_dynamic[k, :self.encode_len, :] = self.dynamic_features[s_idx, t_idx - self.encode_len:t_idx, :]
+            enc_dynamic_nan[k, :self.encode_len, :] = self.dynamic_features_mask[s_idx, t_idx - self.encode_len:t_idx, :]
             encode_len[k] = self.encode_len
 
             if with_targets:
-                y_decode[k, :, :] = self.data[s_idx, t_idx:t_idx+self.decode_len, :self.n_dec_feature]
-                is_nan_decode[k, :, :] = self.data_mask[s_idx, t_idx:t_idx+self.decode_len, :self.n_dec_feature]
+                y_decode[k, :, :] = self.dynamic_features[s_idx, t_idx:t_idx + self.decode_len, :self.n_dec_feature]
+                is_nan_decode[k, :, :] = self.dynamic_features_mask[s_idx, t_idx:t_idx + self.decode_len, :self.n_dec_feature]
 
         batch = {}
-        batch['x_encode'] = x_encode
+        batch['enc_fixed'] = enc_fixed
+        batch['enc_dynamic'] = enc_dynamic
         batch['encode_len'] = encode_len
         batch['y_decode'] = y_decode
         batch['decode_len'] = decode_len
-        batch['is_nan_encode'] = is_nan_encode
+        batch['enc_dynamic_nan'] = enc_dynamic_nan
         batch['is_nan_decode'] = is_nan_decode
         return batch
 
@@ -309,13 +354,13 @@ class DataBuilder(object):
         for sti in idxes:
             s_idx = sti[0]
             t_idx = sti[1]
-            data_batch.append(self.data[s_idx, t_idx-self.encode_len:t_idx, :])
-            data_batch_mask.append(self.data_mask[s_idx, t_idx-self.encode_len:t_idx, :])
+            data_batch.append(self.dynamic_features[s_idx, t_idx - self.encode_len:t_idx, :])
+            data_batch_mask.append(self.dynamic_features_mask[s_idx, t_idx - self.encode_len:t_idx, :])
             data_len.append(self.encode_len)
 
             if with_targets:
-                target_batch.append(self.data[s_idx, t_idx:t_idx+self.decode_len, :3])
-                target_batch_mask.append(self.data_mask[s_idx, t_idx:t_idx+self.decode_len, :3])
+                target_batch.append(self.dynamic_features[s_idx, t_idx:t_idx + self.decode_len, :3])
+                target_batch_mask.append(self.dynamic_features_mask[s_idx, t_idx:t_idx + self.decode_len, :3])
 
         #print(len(data_batch), type(data_batch))
         if with_targets:

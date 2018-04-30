@@ -20,7 +20,9 @@ ex_files = [
     '{}ld_mog_ex.csv'.format(out_dir),
 ]
 
-def get_his_data(end='2018-04-20-23'):
+def get_his_data():
+    last_day = dt.datetime.now() - dt.timedelta(days=1)
+    end = last_day.replace(hour=23).strftime("%Y-%m-%d-%H")
     for k, fn in enumerate(ex_files):
         df = pd.read_csv(fn)
         last_time = pd.to_datetime(df.time.iloc[-1]).to_datetime()

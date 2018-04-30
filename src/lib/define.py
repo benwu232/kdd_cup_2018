@@ -1,4 +1,5 @@
 import numpy as np
+import datetime as dt
 import torch
 from geopy.distance import geodesic
 import logging
@@ -21,6 +22,8 @@ bj_stations = [
     'xizhimenbei_aq', 'yanqin_aq', 'yizhuang_aq', 'yongdingmennei_aq',
     'yongledian_aq', 'yufa_aq', 'yungang_aq', 'zhiwuyuan_aq']
 
+ld_stations = ['BL0', 'CD9', 'CD1', 'GN0', 'GR4', 'GN3', 'GR9', 'HV1', 'KF1', 'LW2', 'ST5', 'TH4',
+               'MY7', 'BX9', 'BX1', 'CT2', 'CT3', 'CR8', 'GB0', 'HR1', 'LH0', 'KC1', 'RB7', 'TD5']
 
 bj_latitude0 = 39.0
 bj_longitude0 = 115.0
@@ -28,6 +31,7 @@ bj_origin = (bj_latitude0, bj_longitude0)
 ld_latitude0 = 50.5
 ld_longitude0 = -2.0
 ld_origin = (ld_latitude0, ld_longitude0)
+origin_list = [bj_origin, ld_origin]
 
 def cal_pos(point, origin):
     x = geodesic(origin, (origin[0], point[1])).kilometers
