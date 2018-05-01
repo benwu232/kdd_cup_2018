@@ -266,7 +266,9 @@ class DataBuilder(object):
         ts_list = []
         ts_idx = st_data.UtcTime.iloc[-1]
         station_id = st_data.StationId.iloc[-1]
-        for k in range(48):
+        diff23 = 23 - ts_idx.to_pydatetime().hour
+        print(48+diff23)
+        for k in range(48+diff23):
             ts_idx += pd.Timedelta(hours=1)
             ts_list.append(ts_idx)
         extra['UtcTime'] = np.array(ts_list)
@@ -357,15 +359,24 @@ class DataBuilder(object):
                 is_nan_decode[k, :, :] = self.dynamic_features_mask[s_idx, t_idx:t_idx + self.decode_len, :self.n_dec_feature]
                 dec_fixed[k, :, :] = self.fixed_features[s_idx, t_idx:t_idx + self.decode_len, :]
 
+        #remove the tail of the dynamic features
+        remove_tail_prob = 0.8
+        rtp = True if random.random() < remove_tail_prob else False
+        if rtp:
+            last = random.choice([1, 2])
+            enc_dynamic[:, -last, :] = np.nan
+            enc_dynamic_nan[:, -last, :] = 1.0
+            enc_dynamic = np.nan_to_num(enc_dynamic)
+
         batch = {}
-        batch['enc_fixed'] = enc_fixed
-        batch['enc_dynamic'] = enc_dynamic
+        batch['enc_fixed'] = np.asarray(enc_fixed, dtype=np.float32)
+        batch['enc_dynamic'] = np.asarray(enc_dynamic, dtype=np.float32)
         batch['encode_len'] = encode_len
         batch['decode_len'] = decode_len
-        batch['enc_dynamic_nan'] = enc_dynamic_nan
-        batch['y_decode'] = y_decode
-        batch['is_nan_decode'] = is_nan_decode
-        batch['dec_fixed'] = dec_fixed
+        batch['enc_dynamic_nan'] = np.asarray(enc_dynamic_nan, dtype=np.float32)
+        batch['y_decode'] = np.asarray(y_decode, dtype=np.float32)
+        batch['is_nan_decode'] = np.asarray(is_nan_decode, dtype=np.float32)
+        batch['dec_fixed'] = np.asarray(dec_fixed, dtype=np.float32)
         return batch
 
 
