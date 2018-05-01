@@ -2,7 +2,7 @@
 
 import requests
 
-files = {'files': open('../submit/submit.csv', 'rb')}
+files = {'files': open('../submit/submission.csv', 'rb')}
 
 data = {
     "user_id": "benwu232",
