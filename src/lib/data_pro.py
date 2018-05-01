@@ -36,6 +36,22 @@ def read_ld_aq():
     print(len(ld_aq))
     return ld_aq
 
+def read_bj_mg():
+    usecols = ['stationName', 'utc_time', 'temperature', 'pressure', 'humidity', 'wind_direction', 'wind_speed/kph']
+    bj_mg = pd.read_csv('../input/Beijing_historical_meo_grid.csv', usecols=usecols)
+    bj_mg.columns = ['StationId', 'UtcTime', 'Temperature', 'Pressure', 'Humidity', 'WindDirection', 'WindSpeed']
+    print(len(bj_mg))
+
+    usecols = ['station_id', 'time', 'weather', 'temperature', 'pressure', 'humidity', 'wind_direction', 'wind_speed']
+    bj_mg_ex = pd.read_csv('../input/bj_mog_ex.csv', usecols=usecols)
+    bj_mg_ex.columns = ['StationId', 'UtcTime', 'Weather', 'Temperature', 'Pressure', 'Humidity', 'WindDirection', 'WindSpeed']
+    print(len(bj_mg_ex))
+
+    bj_mg = bj_mg.append(bj_mg_ex)
+    bj_mg.drop_duplicates(subset=['StationId', 'UtcTime'], inplace=True)
+    print(len(bj_mg))
+    return bj_mg
+
 #qianmen_aq = read_bj_aq[read_bj_aq['StationId'] == 'qianmen_aq']
 
 def check_stations(df):
@@ -146,6 +162,59 @@ def build_data_dict(df_aq, city='bj'):
 
     return data_dict
 
+def build_grid_dict(df, city='bj'):
+    #Get station list
+    st_list = list(df.StationId.unique())
+    #remove the illegal names
+    for item in st_list:
+        if type(item) != str:
+            st_list.remove(item)
+    st_list.sort()
+    print(st_list)
+    print('Station number: {}'.format(len(st_list)))
+
+    data_dict = OrderedDict()
+    for key in st_list:
+        data_dict[key] = []
+    df.UtcTime = pd.to_datetime(df.UtcTime)
+    #bj_aq.UtcTime.apply(to_pydt)
+    start = dt.datetime(year=2017, month=1, day=1, hour=0)
+    end = pd.to_datetime(df.UtcTime.iloc[-1]).to_pydatetime()
+    for st in data_dict:
+        #st = 'LH0'
+        sub_df = df[df.StationId == st]
+        old_len = len(sub_df)
+        #print('\nBefore insert missing rows: {}, {}'.format(st, len(sub_df)))
+        df_cnt = 0
+        t = start
+
+        while t <= end:
+            ts = dt2pdts(t)
+            #row = sub_df[sub_df.UtcTime==ts]
+            if df_cnt >= len(sub_df):
+                row_dict = {'StationId': st, 'UtcTime': ts, 'PM25': np.nan, 'PM10': np.nan, 'NO2': np.nan, 'CO': np.nan, 'O3': np.nan, 'SO2': np.nan}
+                t += dt.timedelta(hours=1)
+            else:
+                sub_row = sub_df.iloc[df_cnt]
+                if ts < sub_row.UtcTime:
+                    row_dict = {'StationId': st, 'UtcTime': ts, 'PM25': np.nan, 'PM10': np.nan, 'NO2': np.nan, 'CO': np.nan, 'O3': np.nan, 'SO2': np.nan}
+                    t += dt.timedelta(hours=1)
+                elif ts == sub_row.UtcTime:
+                    row_dict = sub_row.to_dict()
+                    t += dt.timedelta(hours=1)
+                    df_cnt += 1
+                    #if df_cnt % 1000 == 0:
+                    #    print(df_cnt)
+                else:
+                    print('should not run here!')
+                    exit()
+            data_dict[st].append(row_dict)
+        data_dict[st] = pd.DataFrame(data_dict[st])
+        #print('After insert missing rows: {}, {}'.format(st, len(data_dict[st])))
+        print('\nStation "{}", insert missing rows, {} ==>> {}'.format(st, old_len, len(data_dict[st])))
+
+    return data_dict
+
 def build_bj_st1():
     with open('../input/bj_st_dict.pkl', 'rb') as fp:
         data_dict = pickle.load(fp)
@@ -175,10 +244,14 @@ def load_data():
     #axis1: 0, air quality; 1, meterology
     data = [[], []]
 
-    bj_aq = read_bj_aq()
-    #check_stations(bj_aq)
-    bj_aq = build_data_dict(bj_aq, city='bj')
-    data[0].append(bj_aq)
+    #bj_aq = read_bj_aq()
+    ##check_stations(bj_aq)
+    #bj_aq = build_data_dict(bj_aq, city='bj')
+    #data[0].append(bj_aq)
+
+    bj_mg = read_bj_mg()
+    bj_mg = build_grid_dict(bj_mg)
+    data[0].append(bj_mg)
 
     ld_aq = read_ld_aq()
     #check_stations(ld_aq)

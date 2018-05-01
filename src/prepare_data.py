@@ -3,5 +3,5 @@ from lib.data_pro import load_data
 
 
 
-get_his_data()
+#get_his_data()
 load_data()
