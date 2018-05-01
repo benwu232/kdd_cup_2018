@@ -281,7 +281,7 @@ class EncDec(object):
         clf_dir = '../clf/'
 
         max_score = 1.0
-        sb_len = 7
+        sb_len = 11
         kf = ''
         if 'kf' in kwargs:
             kf = 'kf{}_'.format(kwargs['kf'])
