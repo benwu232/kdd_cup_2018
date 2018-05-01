@@ -9,30 +9,44 @@ import random
 from collections import OrderedDict
 from lib.define import *
 
-def read_bj_aq():
+def read_bj_aq0():
     bj_aq = pd.read_csv('../input/beijing_aq.csv')
     bj_aq.columns = ['StationId', 'UtcTime', 'PM25', 'PM10', 'NO2', 'CO', 'O3', 'SO2']
     print(len(bj_aq))
+    return bj_aq
 
+def read_bj_aq1():
     bj_aq1 = pd.read_csv('../input/bj_aq_ex.csv')
     bj_aq1.drop(['id'], axis=1, inplace=True)
     bj_aq1.columns = ['StationId', 'UtcTime', 'PM25', 'PM10', 'NO2', 'CO', 'O3', 'SO2']
     print(len(bj_aq1))
+    return bj_aq1
+
+def read_bj_aq():
+    bj_aq = read_bj_aq0()
+    bj_aq1 = read_bj_aq1()
 
     bj_aq = bj_aq.append(bj_aq1)
     bj_aq.drop_duplicates(subset=['StationId', 'UtcTime'], inplace=True)
     print(len(bj_aq))
     return bj_aq
 
-def read_ld_aq():
+def read_ld_aq0():
     ld_aq = pd.read_csv('../input/london_aq.csv')
     ld_aq.columns = ['StationId', 'UtcTime', 'PM25', 'PM10', 'NO2']
     print(len(ld_aq))
+    return ld_aq
 
+def read_ld_aq1():
     ld_aq1 = pd.read_csv('../input/ld_aq_ex.csv')
     ld_aq1.drop(['id'], axis=1, inplace=True)
     ld_aq1.columns = ['StationId', 'UtcTime', 'PM25', 'PM10', 'NO2', 'CO', 'O3', 'SO2']
     print(len(ld_aq1))
+    return ld_aq1
+
+def read_ld_aq():
+    ld_aq = read_ld_aq0()
+    ld_aq1 = read_ld_aq1()
 
     ld_aq = ld_aq.append(ld_aq1)
     ld_aq.drop_duplicates(subset=['StationId', 'UtcTime'], inplace=True)
@@ -40,22 +54,43 @@ def read_ld_aq():
     print(len(ld_aq))
     return ld_aq
 
-def read_bj_mg():
+def read_bj_mg0():
     usecols = ['stationName', 'utc_time', 'temperature', 'pressure', 'humidity', 'wind_direction', 'wind_speed/kph']
     bj_mg = pd.read_csv('../input/Beijing_historical_meo_grid.csv', usecols=usecols)
     bj_mg.columns = ['StationId', 'UtcTime', 'Temperature', 'Pressure', 'Humidity', 'WindDirection', 'WindSpeed']
     print(len(bj_mg))
+    return bj_mg
 
+def read_bj_mg1():
     usecols = ['station_id', 'time', 'weather', 'temperature', 'pressure', 'humidity', 'wind_direction', 'wind_speed']
     bj_mg_ex = pd.read_csv('../input/bj_mog_ex.csv', usecols=usecols)
     bj_mg_ex.columns = ['StationId', 'UtcTime', 'Weather', 'Temperature', 'Pressure', 'Humidity', 'WindDirection', 'WindSpeed']
     print(len(bj_mg_ex))
+    return bj_mg_ex
+
+def read_bj_mg():
+    bj_mg = read_bj_mg0()
+    bj_mg_ex = read_bj_mg1()
 
     bj_mg = bj_mg.append(bj_mg_ex)
     bj_mg.drop_duplicates(subset=['StationId', 'UtcTime'], inplace=True)
     bj_mg = bj_mg[['StationId', 'UtcTime', 'Weather', 'Temperature', 'Pressure', 'Humidity', 'WindDirection', 'WindSpeed']]
     print(len(bj_mg))
-    return bj_mg_ex
+    return bj_mg
+
+def read_ld_mg0():
+    usecols = ['stationName', 'utc_time', 'temperature', 'pressure', 'humidity', 'wind_direction', 'wind_speed/kph']
+    ld_mg = pd.read_csv('../input/London_historical_meo_grid.csv', usecols=usecols)
+    ld_mg.columns = ['StationId', 'UtcTime', 'Temperature', 'Pressure', 'Humidity', 'WindDirection', 'WindSpeed']
+    print(len(ld_mg))
+    return ld_mg
+
+def read_ld_mg1():
+    usecols = ['station_id', 'time', 'weather', 'temperature', 'pressure', 'humidity', 'wind_direction', 'wind_speed']
+    ld_mg_ex = pd.read_csv('../input/ld_mog_ex.csv', usecols=usecols)
+    ld_mg_ex.columns = ['StationId', 'UtcTime', 'Weather', 'Temperature', 'Pressure', 'Humidity', 'WindDirection', 'WindSpeed']
+    print(len(ld_mg_ex))
+    return ld_mg_ex
 
 #qianmen_aq = read_bj_aq[read_bj_aq['StationId'] == 'qianmen_aq']
 
@@ -318,37 +353,35 @@ def integrate_data(data_file):
 
 
 
-def read_bj_mg0():
-    usecols = ['stationName', 'utc_time', 'temperature', 'pressure', 'humidity', 'wind_direction', 'wind_speed/kph']
-    bj_mg = pd.read_csv('../input/Beijing_historical_meo_grid.csv', usecols=usecols)
-    bj_mg.columns = ['StationId', 'UtcTime', 'Temperature', 'Pressure', 'Humidity', 'WindDirection', 'WindSpeed']
-    print(len(bj_mg))
-    return bj_mg
 
 def integrate_data0(data_file):
     #axis0: 0, bj; 1, ld
     #axis1: 0, air quality; 1, meterology
     data = [[], []]
 
-    #bj_aq = read_bj_aq()
-    ##check_stations(bj_aq)
+    end_str = '2017-01-07 05:00:00'
+
+    bj_aq = read_bj_aq()
+    #check_stations(bj_aq)
     #bj_aq = build_data_dict(bj_aq, 0, 0, data, end_str=end_str)
-    #data[0].append(bj_aq)
+    bj_aq = build_data_dict(bj_aq, 0, 0, data, end_str='2018-03-31 15:00:00')
+    data[0].append(bj_aq)
+
+    ld_aq = read_ld_aq()
+    #check_stations(ld_aq)
+    #ld_aq = build_data_dict(ld_aq, 1, 0, data, end_str=end_str)
+    ld_aq = build_data_dict(ld_aq, 1, 0, data, end_str='2018-03-31 23:00:00')
+    data[1].append(ld_aq)
 
     bj_mg = read_bj_mg0()
+    #bj_mg = build_data_dict(bj_mg, 0, 1, data, end_str=end_str)
     bj_mg = build_data_dict(bj_mg, 0, 1, data, end_str='2018-03-27 05:00:00')
-    #bj_mg = build_data_dict(bj_mg, 0, 1, data, end_str='2017-01-10 00:00:00')
     data[0].append(bj_mg)
 
-    #ld_aq = read_ld_aq()
-    ##check_stations(ld_aq)
-    #ld_aq = build_data_dict(ld_aq, 1, 0, data, end_str='')
-    #data[1].append(ld_aq)
-
-    #ld_mg = read_ld_mg0()
-    #ld_mg = build_data_dict(ld_mg, 1, 1, data, end_str='2018-03-27 05:00:00')
-    ##ld_mg = build_data_dict(ld_mg, 0, 1, data, end_str='2017-01-10 00:00:00')
-    #data[0].append(ld_mg)
+    ld_mg = read_ld_mg0()
+    #ld_mg = build_data_dict(ld_mg, 1, 1, data, end_str=end_str)
+    ld_mg = build_data_dict(ld_mg, 1, 1, data, end_str='2018-03-27 05:00:00')
+    data[0].append(ld_mg)
 
     save_dump(data, data_file)
     return data
