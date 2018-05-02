@@ -416,12 +416,12 @@ def integrate_data_ex(data_file):
 
     bj_mg = read_bj_mg1()
     #bj_mg = build_data_dict(bj_mg, 0, 1, data, end_str=end_str)
-    bj_mg = build_data_dict(bj_mg, 0, 1, data, start_str='2018-03-27 06:00:00')
+    bj_mg = build_data_dict(bj_mg, 0, 1, data, start_str='2018-03-27 06:00:00', is_ex=True)
     data[0].append(bj_mg)
 
     ld_mg = read_ld_mg1()
     #ld_mg = build_data_dict(ld_mg, 1, 1, data, end_str=end_str)
-    ld_mg = build_data_dict(ld_mg, 1, 1, data, end_str='2018-03-27 06:00:00')
+    ld_mg = build_data_dict(ld_mg, 1, 1, data, end_str='2018-03-27 06:00:00', is_ex=True)
     data[0].append(ld_mg)
 
     save_dump(data, data_file)
