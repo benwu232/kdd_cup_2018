@@ -2,9 +2,12 @@ import os
 import pandas as pd
 from lib.define import load_dump
 from predict import predict
+import glob
 
-fusion_list = ['submit0.csv', 'submit1.csv', 'submit2.csv', 'submit3.csv',
-               'submit4.csv', 'submit5.csv', 'submit6.csv']
+fusion_list = glob.glob('../submit/submit*.csv')
+redundant = '../submit/submit.csv'
+if redundant in fusion_list:
+    fusion_list.remove(redundant)
 
 def fusion(fusion_file_list, submission_csv):
     print('Fusioning ...')
