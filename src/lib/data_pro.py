@@ -405,13 +405,13 @@ def integrate_data_ex(data_file):
     bj_aq = read_bj_aq1()
     #check_stations(bj_aq)
     #bj_aq = build_data_dict(bj_aq, 0, 0, data, end_str=end_str)
-    bj_aq = build_data_dict(bj_aq, 0, 0, data, start_str='2018-03-31 16:00:00')
+    bj_aq = build_data_dict(bj_aq, 0, 0, data, start_str='2018-03-31 16:00:00', is_ex=True)
     data[0].append(bj_aq)
 
     ld_aq = read_ld_aq1()
     #check_stations(ld_aq)
     #ld_aq = build_data_dict(ld_aq, 1, 0, data, end_str=end_str)
-    ld_aq = build_data_dict(ld_aq, 1, 0, data, start_str='2018-04-01 00:00:00')
+    ld_aq = build_data_dict(ld_aq, 1, 0, data, start_str='2018-04-01 00:00:00', is_ex=True)
     data[1].append(ld_aq)
 
     bj_mg = read_bj_mg1()
@@ -422,7 +422,7 @@ def integrate_data_ex(data_file):
     ld_mg = read_ld_mg1()
     #ld_mg = build_data_dict(ld_mg, 1, 1, data, end_str=end_str)
     ld_mg = build_data_dict(ld_mg, 1, 1, data, end_str='2018-03-27 06:00:00', is_ex=True)
-    data[0].append(ld_mg)
+    data[1].append(ld_mg)
 
     save_dump(data, data_file)
     return data
