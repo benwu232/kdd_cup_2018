@@ -92,7 +92,7 @@ def read_ld_mg1():
     usecols = ['station_id', 'time', 'weather', 'temperature', 'pressure', 'humidity', 'wind_direction', 'wind_speed']
     ld_mg_ex = pd.read_csv('../input/ld_mog_ex.csv', usecols=usecols)
     ld_mg_ex.columns = ['StationId', 'UtcTime', 'Weather', 'Temperature', 'Pressure', 'Humidity', 'WindDirection', 'WindSpeed']
-    lg_mg_ex = ld_mg_ex[['StationId', 'UtcTime', 'Temperature', 'Pressure', 'Humidity', 'WindDirection', 'WindSpeed', 'Weather']]
+    ld_mg_ex = ld_mg_ex[['StationId', 'UtcTime', 'Temperature', 'Pressure', 'Humidity', 'WindDirection', 'WindSpeed', 'Weather']]
     print(len(ld_mg_ex))
     return ld_mg_ex
 
