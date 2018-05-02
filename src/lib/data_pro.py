@@ -431,28 +431,25 @@ def merge_dump():
     dump0 = load_dump('../input/data0.pkl')
     dump1 = load_dump('../input/data1.pkl')
 
-    '''
     for st in bj_stations:
         dump0[0][0][st] = dump0[0][0][st].append(dump1[0][0][st])
         dump0[0][0][st] = dump0[0][0][st][['StationId', 'UtcTime', 'PM25', 'PM10', 'NO2', 'CO', 'O3', 'SO2']]
-        print('{}: {}'.format(st, len(dump0[0][0][st])))
+    print('{}: {}'.format(st, len(dump0[0][0][st])))
 
     for st in bj_grids:
         dump0[0][1][st] = dump0[0][1][st].append(dump1[0][1][st])
         dump0[0][1][st] = dump0[0][1][st][['StationId', 'UtcTime', 'Temperature', 'Pressure', 'Humidity', 'WindDirection', 'WindSpeed', 'Weather']]
-        print('{}: {}'.format(st, len(dump0[0][1][st])))
+    print('{}: {}'.format(st, len(dump0[0][1][st])))
 
     for st in ld_stations:
         dump0[1][0][st] = dump0[1][0][st].append(dump1[1][0][st])
         dump0[1][0][st] = dump0[1][0][st][['StationId', 'UtcTime', 'PM25', 'PM10', 'NO2', 'CO', 'O3', 'SO2']]
-        print('{}: {}'.format(st, len(dump0[1][0][st])))
-    '''
+    print('{}: {}'.format(st, len(dump0[1][0][st])))
 
     for st in ld_grids:
         dump0[1][1][st] = dump0[1][1][st].append(dump1[1][1][st])
         dump0[1][1][st] = dump0[1][1][st][['StationId', 'UtcTime', 'Temperature', 'Pressure', 'Humidity', 'WindDirection', 'WindSpeed', 'Weather']]
-        print('{}: {}'.format(st, len(dump0[1][1][st])))
-    exit()
+    print('{}: {}'.format(st, len(dump0[1][1][st])))
     return dump0
 
 
