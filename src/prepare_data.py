@@ -3,5 +3,5 @@ from lib.data_pro import integrate_data
 
 
 
-#get_his_data()
+get_his_data()
 integrate_data('../input/data_aq.pkl')
