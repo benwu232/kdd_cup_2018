@@ -376,21 +376,21 @@ def integrate_data0(data_file):
     bj_aq = build_data_dict(bj_aq, 0, 0, data, end_str='2018-03-31 15:00:00')
     data[0].append(bj_aq)
 
+    bj_mg = read_bj_mg0()
+    #bj_mg = build_data_dict(bj_mg, 0, 1, data, end_str=end_str)
+    bj_mg = build_data_dict(bj_mg, 0, 1, data, end_str='2018-03-27 05:00:00')
+    data[0].append(bj_mg)
+
     ld_aq = read_ld_aq()
     #check_stations(ld_aq)
     #ld_aq = build_data_dict(ld_aq, 1, 0, data, end_str=end_str)
     ld_aq = build_data_dict(ld_aq, 1, 0, data, end_str='2018-03-31 23:00:00')
     data[1].append(ld_aq)
 
-    bj_mg = read_bj_mg0()
-    #bj_mg = build_data_dict(bj_mg, 0, 1, data, end_str=end_str)
-    bj_mg = build_data_dict(bj_mg, 0, 1, data, end_str='2018-03-27 05:00:00')
-    data[0].append(bj_mg)
-
     ld_mg = read_ld_mg0()
     #ld_mg = build_data_dict(ld_mg, 1, 1, data, end_str=end_str)
     ld_mg = build_data_dict(ld_mg, 1, 1, data, end_str='2018-03-27 05:00:00')
-    data[0].append(ld_mg)
+    data[1].append(ld_mg)
 
     save_dump(data, data_file)
     return data
@@ -431,6 +431,7 @@ def merge_dump():
     dump0 = load_dump('../input/data0.pkl')
     dump1 = load_dump('../input/data1.pkl')
 
+    '''
     for st in bj_stations:
         dump0[0][0][st] = dump0[0][0][st].append(dump1[0][0][st])
         dump0[0][0][st] = dump0[0][0][st][['StationId', 'UtcTime', 'PM25', 'PM10', 'NO2', 'CO', 'O3', 'SO2']]
@@ -445,6 +446,7 @@ def merge_dump():
         dump0[1][0][st] = dump0[1][0][st].append(dump1[1][0][st])
         dump0[1][0][st] = dump0[1][0][st][['StationId', 'UtcTime', 'PM25', 'PM10', 'NO2', 'CO', 'O3', 'SO2']]
         print('{}: {}'.format(st, len(dump0[1][0][st])))
+    '''
 
     for st in ld_grids:
         dump0[1][1][st] = dump0[1][1][st].append(dump1[1][1][st])
