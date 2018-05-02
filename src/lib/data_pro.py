@@ -421,7 +421,7 @@ def integrate_data_ex(data_file):
 
     ld_mg = read_ld_mg1()
     #ld_mg = build_data_dict(ld_mg, 1, 1, data, end_str=end_str)
-    ld_mg = build_data_dict(ld_mg, 1, 1, data, end_str='2018-03-27 06:00:00', is_ex=True)
+    ld_mg = build_data_dict(ld_mg, 1, 1, data, start_str='2018-03-27 06:00:00', is_ex=True)
     data[1].append(ld_mg)
 
     save_dump(data, data_file)
