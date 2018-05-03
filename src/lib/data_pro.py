@@ -652,28 +652,28 @@ class DataBuilder(object):
         self.grid_features = []
         print('Making Beijing grid features ...')
         time_len = len(self.raw_data[0][1][bj_grids[0]])
-        bj_grid_feature = np.zeros((time_len, self.n_grid_features, 21, 31))
+        bj_grid_feature = np.zeros((time_len, self.n_grid_features, 31, 21))
         for k, st in enumerate(bj_grids):
             print(st)
-            grid_data = self.raw_data[0][1][st][['X', 'Y', 'WindSpeedX', 'WindSpeedY', 'Weather', 'Temperature', 'Pressure', 'Humidity']]
+            grid_data = self.raw_data[0][1][st][['X', 'Y', 'WindSpeedX', 'WindSpeedY', 'Weather', 'Temperature', 'Pressure', 'Humidity']].values
             for t_idx in range(time_len):
                 y = k % 21
                 x = k // 21
-                bj_grid_feature[t_idx, :, x, y] = grid_data.iloc[k].values
+                bj_grid_feature[t_idx, :, x, y] = grid_data[k]
         self.grid_features.append(bj_grid_feature)
 
         print('Making London grid features ...')
         time_len = len(self.raw_data[1][1][ld_grids[0]])
-        ld_grid_feature = np.zeros((time_len, self.n_grid_features, 21, 31))
+        ld_grid_feature = np.zeros((time_len, self.n_grid_features, 31, 21))
         start = 105
         for k in range(start, 105+651):
             st = ld_grids[k]
             print(st)
-            grid_data = self.raw_data[1][1][st][['X', 'Y', 'WindSpeedX', 'WindSpeedY', 'Weather', 'Temperature', 'Pressure', 'Humidity']]
+            grid_data = self.raw_data[1][1][st][['X', 'Y', 'WindSpeedX', 'WindSpeedY', 'Weather', 'Temperature', 'Pressure', 'Humidity']].values
             for t_idx in range(time_len):
                 y = (k - start) % 21
                 x = (k - start) // 21
-                ld_grid_feature[t_idx, :, x, y] = grid_data.iloc[k].values
+                ld_grid_feature[t_idx, :, x, y] = grid_data[k]
         self.grid_features.append(ld_grid_feature)
         return self.grid_features
 
