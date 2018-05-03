@@ -1,15 +1,26 @@
 import numpy as np
+import pandas as pd
 import datetime as dt
 import torch
 from geopy.distance import geodesic
 import logging
 import pickle
+import sklearn
+from sklearn import preprocessing
+from collections import OrderedDict
+
 
 DBG = 0
+DBG = 1
 
 DECODE_STEPS = 48
 USE_CUDA = True
 device = torch.device("cuda" if USE_CUDA else "cpu")
+
+whether_list = ['CLEAR_NIGHT', 'SNOW', 'RAIN', 'PARTLY_CLOUDY_DAY', 'HAZE',
+                'CLEAR_DAY', 'PARTLY_CLOUDY_NIGHT', 'WIND', 'CLOUDY']
+whether_le = preprocessing.LabelEncoder()
+whether_le.fit(whether_list)
 
 bj_stations = [
     'aotizhongxin_aq', 'badaling_aq', 'beibuxinqu_aq', 'daxing_aq',
@@ -40,6 +51,23 @@ def cal_pos(point, origin):
 
 #print(cal_pos((39.1, 115.1), bj_origin))
 #print(cal_pos((50.6, -1.9), ld_origin))
+
+def cal_grid_pos():
+    grid_pos = OrderedDict()
+    grid_ll = []
+    grid_ll.append(pd.read_csv('../input/Beijing_grid_weather_station.csv'))
+    grid_ll.append(pd.read_csv('../input/London_grid_weather_station.csv'))
+
+    for city in (0, 1):
+        for k in range(len(grid_ll[city])):
+            station_id = grid_ll[city].StationId[k]
+            latitude = grid_ll[city].Latitude[k]
+            longitude = grid_ll[city].Longitude[k]
+            pos = cal_pos((latitude, longitude), origin_list[city])
+            grid_pos[station_id] = pos
+    return grid_pos
+
+grid_pos = cal_grid_pos()
 
 
 def now2str(format="%Y-%m-%d_%H-%M-%S-%f"):

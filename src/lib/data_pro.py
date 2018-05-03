@@ -96,6 +96,16 @@ def read_ld_mg1():
     print(len(ld_mg_ex))
     return ld_mg_ex
 
+def read_ld_mg():
+    ld_mg = read_ld_mg0()
+    ld_mg_ex = read_ld_mg1()
+
+    ld_mg = ld_mg.append(ld_mg_ex)
+    ld_mg.drop_duplicates(subset=['StationId', 'UtcTime'], inplace=True)
+    ld_mg = ld_mg[['StationId', 'UtcTime', 'Weather', 'Temperature', 'Pressure', 'Humidity', 'WindDirection', 'WindSpeed']]
+    print(len(ld_mg))
+    return ld_mg
+
 #qianmen_aq = read_bj_aq[read_bj_aq['StationId'] == 'qianmen_aq']
 
 def check_stations(df):
@@ -341,10 +351,15 @@ def integrate_data(data_file):
     end_str = '2017-01-05 00:00:00'
     end_str = ''
 
-    #bj_aq = read_bj_aq()
-    ##check_stations(bj_aq)
-    #bj_aq = build_data_dict(bj_aq, 0, 0, data, end_str=end_str)
-    #data[0].append(bj_aq)
+
+    bj_mg = read_bj_mg()
+    ld_mg = read_ld_mg()
+
+
+    bj_aq = read_bj_aq()
+    #check_stations(bj_aq)
+    bj_aq = build_data_dict(bj_aq, 0, 0, data, end_str=end_str)
+    data[0].append(bj_aq)
 
     bj_mg = read_bj_mg()
     bj_mg = build_data_dict(bj_mg, 0, 1, data, end_str=end_str)
@@ -356,6 +371,10 @@ def integrate_data(data_file):
     ld_aq = build_data_dict(ld_aq, 1, 0, data, end_str=end_str)
     data[1].append(ld_aq)
 
+    ld_mg = read_ld_mg()
+    ld_mg = build_data_dict(ld_mg, 1, 1, data, end_str=end_str)
+    #ld_mg = build_data_dict(ld_mg, 0, 1, data, end_str='2017-01-10 00:00:00')
+    data[1].append(ld_mg)
 
     save_dump(data, data_file)
     return data
@@ -377,6 +396,7 @@ def integrate_data0(data_file):
     data[0].append(bj_aq)
 
     bj_mg = read_bj_mg0()
+    bj_mg = pro_grid_data(bj_mg)
     #bj_mg = build_data_dict(bj_mg, 0, 1, data, end_str=end_str)
     bj_mg = build_data_dict(bj_mg, 0, 1, data, end_str='2018-03-27 05:00:00')
     data[0].append(bj_mg)
@@ -388,6 +408,7 @@ def integrate_data0(data_file):
     data[1].append(ld_aq)
 
     ld_mg = read_ld_mg0()
+    ld_mg = pro_grid_data(ld_mg)
     #ld_mg = build_data_dict(ld_mg, 1, 1, data, end_str=end_str)
     ld_mg = build_data_dict(ld_mg, 1, 1, data, end_str='2018-03-27 05:00:00')
     data[1].append(ld_mg)
@@ -415,17 +436,37 @@ def integrate_data_ex(data_file):
     data[1].append(ld_aq)
 
     bj_mg = read_bj_mg1()
+    bj_mg = pro_grid_data(bj_mg)
     #bj_mg = build_data_dict(bj_mg, 0, 1, data, end_str=end_str)
     bj_mg = build_data_dict(bj_mg, 0, 1, data, start_str='2018-03-27 06:00:00', is_ex=True)
     data[0].append(bj_mg)
 
     ld_mg = read_ld_mg1()
+    ld_mg = pro_grid_data(ld_mg)
     #ld_mg = build_data_dict(ld_mg, 1, 1, data, end_str=end_str)
     ld_mg = build_data_dict(ld_mg, 1, 1, data, start_str='2018-03-27 06:00:00', is_ex=True)
     data[1].append(ld_mg)
 
     save_dump(data, data_file)
     return data
+
+def get_grid_x(station_id):
+    return grid_pos[station_id][0]
+
+def get_grid_y(station_id):
+    return grid_pos[station_id][1]
+
+def pro_grid_data(df):
+    df.Weather = whether_le.transform(df.Weather)
+    df['WindSpeedX'] = df.WindSpeed * np.cos(np.deg2rad(df.WindDirection+90))
+    df['WindSpeedY'] = df.WindSpeed * np.sin(np.deg2rad(df.WindDirection+90))
+    df['X'] = df.StationId.apply(get_grid_x)
+    df['Y'] = df.StationId.apply(get_grid_y)
+    df.drop('WindSpeed', axis=1, inplace=True)
+    df.drop('WindDirection', axis=1, inplace=True)
+    df = df[['StationId', 'UtcTime', 'X', 'Y', 'Temperature', 'Pressure', 'Humidity', 'Weather', 'WindSpeedX', 'WindSpeedY']]
+    #df.drop('StationId', axis=1, inplace=True)
+    return df
 
 def merge_dump():
     dump0 = load_dump('../input/data0.pkl')
@@ -489,11 +530,16 @@ class DataBuilder(object):
         self.fixed_feature_list = ['CityId', 'X', 'Y', 'Day', 'Month', 'Hour', 'Weekday', 'Weekofyear']
         self.dynamic_feature_list = ['PM25', 'PM10', 'O3', 'CO', 'NO2', 'SO2']
         self.n_fixed_feature = len(self.fixed_feature_list)
+        self.grid_feature_list = ['X', 'Y', 'Temperature', 'Pressure', 'Humidity', 'Weather', 'WindSpeedX', 'WindSpeedY']
+        self.grid_fixed = ['X', 'Y', 'WindSpeedX', 'WindSpeedY']
+        self.grid_embedding = ['Weather']
+        self.grid_dynamic = ['Temperature', 'Pressure', 'Humidity']
         self.st_list = []
         self.st_list.append(bj_stations)
         self.st_list.append(ld_stations)
-        self.cal_pos_info()
-        self.make_aq_data()
+        self.cal_aqst_pos()
+        self.make_aq_features()
+        self.make_grid_features()
 
         #todo: need to add other data preprocessing, e.g. 9997, a number which is too big
         self.time_len = self.dynamic_features.shape[1]
@@ -511,7 +557,7 @@ class DataBuilder(object):
         self.test_bb = batch_gen(self.test_idxes, self.build_batch, bb_pars={}, batch_size=self.batch_size,
                                 shuffle=False, forever=False, drop_last=False)
 
-    def cal_pos_info(self):
+    def cal_aqst_pos(self):
         self.pos_list = []
         st_ll = []
         st_ll.append(pd.read_csv('../input/Beijing_AirQuality_Stations_cn.csv'))
@@ -552,7 +598,7 @@ class DataBuilder(object):
         return st_data
 
 
-    def make_aq_data(self):
+    def make_aq_features(self):
         dynamic_features = []
         fixed_features = []
         for city in (0, 1):
@@ -572,6 +618,17 @@ class DataBuilder(object):
 
         self.fixed_features = np.stack(fixed_features)
         self.fixed_features = np.asarray(self.fixed_features, dtype=np.float32)
+
+    def make_grid_features(self):
+        self.grid_features = []
+        time_len = len(self.raw_data[0][1][bj_grids[0]])
+        #n_grid_features =
+        bj_grid_data = np.zeros((time_len, ))
+        for t_idx in range(time_len):
+            #todo
+            pass
+
+        pass
 
     def build_idxes(self):
         self.idxes = []

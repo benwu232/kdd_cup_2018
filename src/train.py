@@ -9,14 +9,16 @@ if __name__ == '__main__':
     base_dir = '../'
     if DBG:
         batch_size = 64
+        encode_len = 50
     else:
         batch_size = 1024
+        encode_len = 720
 
     pars = {
         'with_tblog': True,
         'enc_file': None,
         'dec_file': None,
-        'encode_len': 720,
+        'encode_len': encode_len,
         'val_to_end': 800,
         #'encode_len': 960,
         #'val_to_end': 1080,
