@@ -17,7 +17,7 @@ DECODE_STEPS = 48
 USE_CUDA = True
 device = torch.device("cuda" if USE_CUDA else "cpu")
 
-whether_list = ['CLEAR_NIGHT', 'SNOW', 'RAIN', 'PARTLY_CLOUDY_DAY', 'HAZE',
+whether_list = ['EMPTY', 'CLEAR_NIGHT', 'SNOW', 'RAIN', 'PARTLY_CLOUDY_DAY', 'HAZE',
                 'CLEAR_DAY', 'PARTLY_CLOUDY_NIGHT', 'WIND', 'CLOUDY']
 whether_le = preprocessing.LabelEncoder()
 whether_le.fit(whether_list)
@@ -35,6 +35,8 @@ bj_stations = [
 
 ld_stations = ['BL0', 'CD9', 'CD1', 'GN0', 'GR4', 'GN3', 'GR9', 'HV1', 'KF1', 'LW2', 'ST5', 'TH4',
                'MY7', 'BX9', 'BX1', 'CT2', 'CT3', 'CR8', 'GB0', 'HR1', 'LH0', 'KC1', 'RB7', 'TD5']
+#ld_stations = ['BL0', 'CD9', 'CD1', 'GN0', 'GR4', 'GN3', 'GR9', 'HV1', 'KF1', 'LW2', 'ST5', 'TH4',
+#               'MY7', 'BX9', 'BX1', 'CT2', 'CT3']
 
 bj_latitude0 = 39.0
 bj_longitude0 = 115.0

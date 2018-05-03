@@ -9,16 +9,27 @@ import random
 from collections import OrderedDict
 from lib.define import *
 
+ex_start_str = '2018-05-01 00:00:00'
+ex_start = pd.Timestamp(ex_start_str)
+
+grid_features_w = ['StationId', 'UtcTime', 'X', 'Y', 'Temperature', 'Pressure', 'Humidity', 'Weather', 'WindSpeedX', 'WindSpeedY']
+grid_features = ['StationId', 'UtcTime', 'X', 'Y', 'Temperature', 'Pressure', 'Humidity', 'WindSpeedX', 'WindSpeedY']
+aq_features3 = ['StationId', 'UtcTime', 'PM25', 'PM10', 'NO2']
+aq_features6 = ['StationId', 'UtcTime', 'PM25', 'PM10', 'NO2', 'CO', 'O3', 'SO2']
+
+
+
+
 def read_bj_aq0():
     bj_aq = pd.read_csv('../input/beijing_aq.csv')
-    bj_aq.columns = ['StationId', 'UtcTime', 'PM25', 'PM10', 'NO2', 'CO', 'O3', 'SO2']
+    bj_aq.columns = aq_features6
     print(len(bj_aq))
     return bj_aq
 
 def read_bj_aq1():
     bj_aq1 = pd.read_csv('../input/bj_aq_ex.csv')
     bj_aq1.drop(['id'], axis=1, inplace=True)
-    bj_aq1.columns = ['StationId', 'UtcTime', 'PM25', 'PM10', 'NO2', 'CO', 'O3', 'SO2']
+    bj_aq1.columns = aq_features6
     bj_aq1.drop_duplicates(subset=['StationId', 'UtcTime'], inplace=True)
     print(len(bj_aq1))
     return bj_aq1
@@ -34,14 +45,14 @@ def read_bj_aq():
 
 def read_ld_aq0():
     ld_aq = pd.read_csv('../input/london_aq.csv')
-    ld_aq.columns = ['StationId', 'UtcTime', 'PM25', 'PM10', 'NO2']
+    ld_aq.columns = aq_features3
     print(len(ld_aq))
     return ld_aq
 
 def read_ld_aq1():
     ld_aq1 = pd.read_csv('../input/ld_aq_ex.csv')
     ld_aq1.drop(['id'], axis=1, inplace=True)
-    ld_aq1.columns = ['StationId', 'UtcTime', 'PM25', 'PM10', 'NO2', 'CO', 'O3', 'SO2']
+    ld_aq1.columns = aq_features6
     ld_aq1.drop_duplicates(subset=['StationId', 'UtcTime'], inplace=True)
     print(len(ld_aq1))
     return ld_aq1
@@ -52,7 +63,7 @@ def read_ld_aq():
 
     ld_aq = ld_aq.append(ld_aq1)
     ld_aq.drop_duplicates(subset=['StationId', 'UtcTime'], inplace=True)
-    ld_aq = ld_aq[['StationId', 'UtcTime', 'PM25', 'PM10', 'NO2', 'CO', 'O3', 'SO2']]
+    ld_aq = ld_aq[aq_features6]
     print(len(ld_aq))
     return ld_aq
 
@@ -161,7 +172,7 @@ def build_df1(bj_aq):
 
 period1 = 0
 period2 = 0
-def build_data_dict(df_csv, city_id, is_grid, df_dump, start_str='2017-01-01 00:00:00', end_str='', is_ex=False):
+def build_data_dict(df_csv, city_id, is_grid, df_dump, start_ts=pd.Timestamp('2017-01-01 00:00:00'), end_ts=None, is_ex=False):
     global period2, period1
     ##Get station list
     #st_list = list(df_aq.StationId.unique())
@@ -191,28 +202,20 @@ def build_data_dict(df_csv, city_id, is_grid, df_dump, start_str='2017-01-01 00:
 
     #start0 = dt.datetime(year=2017, month=1, day=1, hour=0)
     for st in data_dict:
-        if data_dict[st] == [] or data_dict[st].empty:
-            start = pd.Timestamp(start_str)
-            df_cnt = 0
-            s = time.clock()
-            sub_df = df_csv[df_csv.StationId == st]
-            period1 += time.clock() - s
-            sub_np = sub_df.values
-        else:
-            #start = pd.Timestamp('2018-04-20 00:00:00')
-            start = pd.Timestamp(start_str)
-            #start = data_dict[st].UtcTime.iloc[-1].to_pydatetime()
-            sub_df = data_dict[st]
-            sub_np = sub_df.values
-            df_cnt = 0
-            while sub_df.UtcTime.iloc[df_cnt] < start:
-                df_cnt += 1
-            #df_cnt = len(data_dict[st]) - 1
-        if end_str == '':
+        start = pd.Timestamp(start_ts)
+        s = time.clock()
+        sub_df = df_csv[df_csv.StationId == st]
+        period1 += time.clock() - s
+        sub_np = sub_df.values
+        df_cnt = 0
+        while sub_df.empty == False and sub_df.UtcTime.iloc[df_cnt] < start:
+            df_cnt += 1
+
+        if end_ts == None:
             #end = df_csv[df_csv['StationId'] == st].UtcTime.iloc[-1]
             end = df_csv.UtcTime.iloc[-1]
         else:
-            end = pd.Timestamp(end_str)
+            end = pd.Timestamp(end_ts)
         #st = 'LH0'
         old_len = len(df_csv[df_csv.StationId == st])
         #print('\nBefore insert missing rows: {}, {}'.format(st, len(sub_df)))
@@ -225,9 +228,9 @@ def build_data_dict(df_csv, city_id, is_grid, df_dump, start_str='2017-01-01 00:
             #fill nan to missing rows of tail
             if is_grid:
                 if is_ex:
-                    row_dict = {'StationId': st, 'UtcTime': ts, 'Temperature': np.nan, 'Pressure': np.nan, 'Humidity': np.nan, 'WindDirection': np.nan, 'WindSpeed': np.nan, 'Weather': np.nan}
+                    row_dict = {'StationId': st, 'UtcTime': ts, 'X': np.nan, 'Y': np.nan, 'Temperature': np.nan, 'Pressure': np.nan, 'Humidity': np.nan, 'Weather': np.nan, 'WindSpeedX': np.nan, 'WindSpeedY': np.nan}
                 else:
-                    row_dict = {'StationId': st, 'UtcTime': ts, 'Temperature': np.nan, 'Pressure': np.nan, 'Humidity': np.nan, 'WindDirection': np.nan, 'WindSpeed': np.nan}
+                    row_dict = {'StationId': st, 'UtcTime': ts, 'X': np.nan, 'Y': np.nan, 'Temperature': np.nan, 'Pressure': np.nan, 'Humidity': np.nan, 'WindSpeedX': np.nan, 'WindSpeedY': np.nan}
             else:
                 row_dict = {'StationId': st, 'UtcTime': ts, 'PM25': np.nan, 'PM10': np.nan, 'NO2': np.nan, 'CO': np.nan, 'O3': np.nan, 'SO2': np.nan}
             if df_cnt >= len(sub_df):
@@ -241,9 +244,9 @@ def build_data_dict(df_csv, city_id, is_grid, df_dump, start_str='2017-01-01 00:
                 elif ts == sub_row[1]:
                     if is_grid:
                         if is_ex:
-                            row_dict = {'StationId': st, 'UtcTime': ts, 'Temperature': sub_row[2], 'Pressure': sub_row[3], 'Humidity': sub_row[4], 'WindDirection': sub_row[5], 'WindSpeed': sub_row[6], 'Weather': sub_row[7]}
+                            row_dict = {'StationId': st, 'UtcTime': ts, 'X': sub_row[2], 'Y': sub_row[3], 'Temperature': sub_row[4], 'Pressure': sub_row[5], 'Humidity': sub_row[6], 'Weather': sub_row[7], 'WindSpeedX': sub_row[8], 'WindSpeedY': sub_row[9]}
                         else:
-                            row_dict = {'StationId': st, 'UtcTime': ts, 'Temperature': sub_row[2], 'Pressure': sub_row[3], 'Humidity': sub_row[4], 'WindDirection': sub_row[5], 'WindSpeed': sub_row[6]}
+                            row_dict = {'StationId': st, 'UtcTime': ts, 'X': sub_row[2], 'Y': sub_row[3], 'Temperature': sub_row[4], 'Pressure': sub_row[5], 'Humidity': sub_row[6], 'WindSpeedX': sub_row[7], 'WindSpeedY': sub_row[8]}
                     else:
                         row_dict = {'StationId': st, 'UtcTime': ts, 'PM25': sub_row[2], 'PM10': sub_row[3], 'NO2': sub_row[4], 'CO': sub_row[5], 'O3': sub_row[6], 'SO2': sub_row[7]}
                     #row_dict = sub_row.to_dict()
@@ -252,9 +255,12 @@ def build_data_dict(df_csv, city_id, is_grid, df_dump, start_str='2017-01-01 00:
                     #if df_cnt % 1000 == 0:
                     #    print(df_cnt)
                 else:
-                    print('should not run here!')
-                    print(st, ts, sub_row[1])
-                    exit()
+                    if ts == pd.Timestamp(ex_start):
+                        df_cnt += 1
+                    else:
+                        print('should not run here!')
+                        print(st, ts, sub_row[1])
+                        exit()
             row_dict_list.append(row_dict)
         period2 += time.clock() - s
         data_dict[st] = pd.DataFrame(row_dict_list)
@@ -263,70 +269,6 @@ def build_data_dict(df_csv, city_id, is_grid, df_dump, start_str='2017-01-01 00:
 
     return data_dict
 
-def build_grid_dict(df, city='bj'):
-    #Get station list
-    st_list = list(df.StationId.unique())
-    #remove the illegal names
-    for item in st_list:
-        if type(item) != str:
-            st_list.remove(item)
-    st_list.sort()
-    print(st_list)
-    print('Station number: {}'.format(len(st_list)))
-
-    data_dict = OrderedDict()
-    for key in st_list:
-        data_dict[key] = []
-    df.UtcTime = pd.to_datetime(df.UtcTime)
-    #bj_aq.UtcTime.apply(to_pydt)
-    start = dt.datetime(year=2017, month=1, day=1, hour=0)
-    end = pd.to_datetime(df.UtcTime.iloc[-1]).to_pydatetime()
-    for st in data_dict:
-        #st = 'LH0'
-        sub_df = df[df.StationId == st]
-        old_len = len(sub_df)
-        #print('\nBefore insert missing rows: {}, {}'.format(st, len(sub_df)))
-        df_cnt = 0
-        t = start
-
-        while t <= end:
-            ts = dt2pdts(t)
-            #row = sub_df[sub_df.UtcTime==ts]
-            if df_cnt >= len(sub_df):
-                row_dict = {'StationId': st, 'UtcTime': ts, 'PM25': np.nan, 'PM10': np.nan, 'NO2': np.nan, 'CO': np.nan, 'O3': np.nan, 'SO2': np.nan}
-                t += dt.timedelta(hours=1)
-            else:
-                sub_row = sub_df.iloc[df_cnt]
-                if ts < sub_row.UtcTime:
-                    row_dict = {'StationId': st, 'UtcTime': ts, 'PM25': np.nan, 'PM10': np.nan, 'NO2': np.nan, 'CO': np.nan, 'O3': np.nan, 'SO2': np.nan}
-                    t += dt.timedelta(hours=1)
-                elif ts == sub_row.UtcTime:
-                    row_dict = sub_row.to_dict()
-                    t += dt.timedelta(hours=1)
-                    df_cnt += 1
-                    #if df_cnt % 1000 == 0:
-                    #    print(df_cnt)
-                else:
-                    print('should not run here!')
-                    exit()
-            data_dict[st].append(row_dict)
-        data_dict[st] = pd.DataFrame(data_dict[st])
-        #print('After insert missing rows: {}, {}'.format(st, len(data_dict[st])))
-        print('\nStation "{}", insert missing rows, {} ==>> {}'.format(st, old_len, len(data_dict[st])))
-
-    return data_dict
-
-def build_bj_st1():
-    with open('../input/bj_st_dict.pkl', 'rb') as fp:
-        data_dict = pickle.load(fp)
-
-    data_nan_dict = {}
-    for st in data_dict:
-        data_dict[st] = data_dict[st][['PM25', 'PM10', 'O3', 'CO', 'NO2', 'SO2']]
-        data_nan_dict[st] = pd.isnull(data_dict[st])#.astype('uint8')
-        #data_nan_dict.columns = ['PM25_NAN', 'PM10_NAN', 'O3_NAN', 'CO_NAN', 'NO2_NAN', 'SO2_NAN']
-        #data_dict[st] = pd.concat([data_dict[st], data_nan_dict], axis=1)
-    return data_dict, data_nan_dict
 
 def build_bj_st():
     with open('../input/bj_st_dict.pkl', 'rb') as fp:
@@ -339,6 +281,7 @@ def build_bj_st():
     return np_data
 
 
+'''
 #load csv, do some processing, and save to pkl
 def integrate_data(data_file):
     if os.path.isfile(data_file):
@@ -350,11 +293,6 @@ def integrate_data(data_file):
 
     end_str = '2017-01-05 00:00:00'
     end_str = ''
-
-
-    bj_mg = read_bj_mg()
-    ld_mg = read_ld_mg()
-
 
     bj_aq = read_bj_aq()
     #check_stations(bj_aq)
@@ -379,10 +317,11 @@ def integrate_data(data_file):
     save_dump(data, data_file)
     return data
 
+'''
 
 
 
-def integrate_data0(data_file):
+def integrate_data0_1(data_file):
     #axis0: 0, bj; 1, ld
     #axis1: 0, air quality; 1, meterology
     data = [[], []]
@@ -392,25 +331,57 @@ def integrate_data0(data_file):
     bj_aq = read_bj_aq()
     #check_stations(bj_aq)
     #bj_aq = build_data_dict(bj_aq, 0, 0, data, end_str=end_str)
-    bj_aq = build_data_dict(bj_aq, 0, 0, data, end_str='2018-03-31 15:00:00')
+    bj_aq = build_data_dict(bj_aq, 0, 0, data, end_ts='2018-03-31 15:00:00')
     data[0].append(bj_aq)
 
     bj_mg = read_bj_mg0()
     bj_mg = pro_grid_data(bj_mg)
     #bj_mg = build_data_dict(bj_mg, 0, 1, data, end_str=end_str)
-    bj_mg = build_data_dict(bj_mg, 0, 1, data, end_str='2018-03-27 05:00:00')
+    bj_mg = build_data_dict(bj_mg, 0, 1, data, end_ts='2018-03-27 05:00:00')
     data[0].append(bj_mg)
 
     ld_aq = read_ld_aq()
     #check_stations(ld_aq)
     #ld_aq = build_data_dict(ld_aq, 1, 0, data, end_str=end_str)
-    ld_aq = build_data_dict(ld_aq, 1, 0, data, end_str='2018-03-31 23:00:00')
+    ld_aq = build_data_dict(ld_aq, 1, 0, data, end_ts='2018-03-31 23:00:00')
     data[1].append(ld_aq)
 
     ld_mg = read_ld_mg0()
     ld_mg = pro_grid_data(ld_mg)
     #ld_mg = build_data_dict(ld_mg, 1, 1, data, end_str=end_str)
-    ld_mg = build_data_dict(ld_mg, 1, 1, data, end_str='2018-03-27 05:00:00')
+    ld_mg = build_data_dict(ld_mg, 1, 1, data, end_ts='2018-03-27 05:00:00')
+    data[1].append(ld_mg)
+
+    save_dump(data, data_file)
+    return data
+
+def integrate_data0(data_file):
+    #axis0: 0, bj; 1, ld
+    #axis1: 0, air quality; 1, meterology
+    data = [[], []]
+
+    bj_aq = read_bj_aq()
+    #check_stations(bj_aq)
+    #bj_aq = build_data_dict(bj_aq, 0, 0, data, end_str=end_str)
+    bj_aq = build_data_dict(bj_aq, 0, 0, data, end_ts='2018-04-30 23:00:00')
+    data[0].append(bj_aq)
+
+    bj_mg = read_bj_mg()
+    bj_mg = pro_grid_data(bj_mg)
+    #bj_mg = build_data_dict(bj_mg, 0, 1, data, end_str=end_str)
+    bj_mg = build_data_dict(bj_mg, 0, 1, data, end_ts='2018-04-30 23:00:00')
+    data[0].append(bj_mg)
+
+    ld_aq = read_ld_aq()
+    #check_stations(ld_aq)
+    #ld_aq = build_data_dict(ld_aq, 1, 0, data, end_str=end_str)
+    ld_aq = build_data_dict(ld_aq, 1, 0, data, end_ts='2018-04-30 23:00:00')
+    data[1].append(ld_aq)
+
+    ld_mg = read_ld_mg()
+    ld_mg = pro_grid_data(ld_mg)
+    #ld_mg = build_data_dict(ld_mg, 1, 1, data, end_str=end_str)
+    ld_mg = build_data_dict(ld_mg, 1, 1, data, end_ts='2018-04-30 23:00:00')
     data[1].append(ld_mg)
 
     save_dump(data, data_file)
@@ -424,28 +395,63 @@ def integrate_data_ex(data_file):
     end_str = '2017-01-07 05:00:00'
 
     bj_aq = read_bj_aq1()
+    ex_end = bj_aq.UtcTime.iloc[-1]
     #check_stations(bj_aq)
     #bj_aq = build_data_dict(bj_aq, 0, 0, data, end_str=end_str)
-    bj_aq = build_data_dict(bj_aq, 0, 0, data, start_str='2018-03-31 16:00:00', is_ex=True)
+    bj_aq = build_data_dict(bj_aq, 0, 0, data, start_ts=ex_start_str, end_ts=ex_end, is_ex=True)
     data[0].append(bj_aq)
 
     ld_aq = read_ld_aq1()
     #check_stations(ld_aq)
     #ld_aq = build_data_dict(ld_aq, 1, 0, data, end_str=end_str)
-    ld_aq = build_data_dict(ld_aq, 1, 0, data, start_str='2018-04-01 00:00:00', is_ex=True)
+    ld_aq = build_data_dict(ld_aq, 1, 0, data, start_ts=ex_start_str, end_ts=ex_end, is_ex=True)
     data[1].append(ld_aq)
 
     bj_mg = read_bj_mg1()
     bj_mg = pro_grid_data(bj_mg)
     #bj_mg = build_data_dict(bj_mg, 0, 1, data, end_str=end_str)
-    bj_mg = build_data_dict(bj_mg, 0, 1, data, start_str='2018-03-27 06:00:00', is_ex=True)
+    bj_mg = build_data_dict(bj_mg, 0, 1, data, start_ts=ex_start_str, end_ts=ex_end, is_ex=True)
     data[0].append(bj_mg)
 
     ld_mg = read_ld_mg1()
     ld_mg = pro_grid_data(ld_mg)
     #ld_mg = build_data_dict(ld_mg, 1, 1, data, end_str=end_str)
-    ld_mg = build_data_dict(ld_mg, 1, 1, data, start_str='2018-03-27 06:00:00', is_ex=True)
+    ld_mg = build_data_dict(ld_mg, 1, 1, data, start_ts=ex_start_str, end_ts=ex_end, is_ex=True)
     data[1].append(ld_mg)
+
+    save_dump(data, data_file)
+    return data
+
+def integrate_data_ex1(data_file):
+    #axis0: 0, bj; 1, ld
+    #axis1: 0, air quality; 1, meterology
+    data = [[], []]
+
+    end_str = '2017-01-07 05:00:00'
+
+    bj_aq = read_bj_aq1()
+    #check_stations(bj_aq)
+    #bj_aq = build_data_dict(bj_aq, 0, 0, data, end_str=end_str)
+    bj_aq = build_data_dict(bj_aq, 0, 0, data, start_ts='2018-03-31 16:00:00', is_ex=True)
+    data[0].append(bj_aq)
+
+    ld_aq = read_ld_aq1()
+    #check_stations(ld_aq)
+    #ld_aq = build_data_dict(ld_aq, 1, 0, data, end_str=end_str)
+    ld_aq = build_data_dict(ld_aq, 1, 0, data, start_ts='2018-04-01 00:00:00', is_ex=True)
+    data[1].append(ld_aq)
+
+    ld_mg = read_ld_mg1()
+    ld_mg = pro_grid_data(ld_mg)
+    #ld_mg = build_data_dict(ld_mg, 1, 1, data, end_str=end_str)
+    ld_mg = build_data_dict(ld_mg, 1, 1, data, start_ts='2018-03-27 06:00:00', is_ex=True)
+    data[1].append(ld_mg)
+
+    bj_mg = read_bj_mg1()
+    bj_mg = pro_grid_data(bj_mg)
+    #bj_mg = build_data_dict(bj_mg, 0, 1, data, end_str=end_str)
+    bj_mg = build_data_dict(bj_mg, 0, 1, data, start_ts='2018-03-27 06:00:00', is_ex=True)
+    data[0].append(bj_mg)
 
     save_dump(data, data_file)
     return data
@@ -456,15 +462,26 @@ def get_grid_x(station_id):
 def get_grid_y(station_id):
     return grid_pos[station_id][1]
 
+def nan_to_empty(item):
+    if item is np.nan:
+        return 'EMPTY'
+    else:
+        return item
+
 def pro_grid_data(df):
-    df.Weather = whether_le.transform(df.Weather)
+    if 'Weather' in df.columns:
+        df.Weather = df.Weather.apply(nan_to_empty)
+        df.Weather = whether_le.transform(df.Weather)
     df['WindSpeedX'] = df.WindSpeed * np.cos(np.deg2rad(df.WindDirection+90))
     df['WindSpeedY'] = df.WindSpeed * np.sin(np.deg2rad(df.WindDirection+90))
     df['X'] = df.StationId.apply(get_grid_x)
     df['Y'] = df.StationId.apply(get_grid_y)
     df.drop('WindSpeed', axis=1, inplace=True)
     df.drop('WindDirection', axis=1, inplace=True)
-    df = df[['StationId', 'UtcTime', 'X', 'Y', 'Temperature', 'Pressure', 'Humidity', 'Weather', 'WindSpeedX', 'WindSpeedY']]
+    if 'Weather' in df.columns:
+        df = df[grid_features_w]
+    else:
+        df = df[grid_features]
     #df.drop('StationId', axis=1, inplace=True)
     return df
 
@@ -474,22 +491,22 @@ def merge_dump():
 
     for st in bj_stations:
         dump0[0][0][st] = dump0[0][0][st].append(dump1[0][0][st])
-        dump0[0][0][st] = dump0[0][0][st][['StationId', 'UtcTime', 'PM25', 'PM10', 'NO2', 'CO', 'O3', 'SO2']]
+        dump0[0][0][st] = dump0[0][0][st][aq_features6]
     print('{}: {}'.format(st, len(dump0[0][0][st])))
 
     for st in bj_grids:
         dump0[0][1][st] = dump0[0][1][st].append(dump1[0][1][st])
-        dump0[0][1][st] = dump0[0][1][st][['StationId', 'UtcTime', 'Temperature', 'Pressure', 'Humidity', 'WindDirection', 'WindSpeed', 'Weather']]
+        dump0[0][1][st] = dump0[0][1][st][grid_features_w]
     print('{}: {}'.format(st, len(dump0[0][1][st])))
 
     for st in ld_stations:
         dump0[1][0][st] = dump0[1][0][st].append(dump1[1][0][st])
-        dump0[1][0][st] = dump0[1][0][st][['StationId', 'UtcTime', 'PM25', 'PM10', 'NO2', 'CO', 'O3', 'SO2']]
+        dump0[1][0][st] = dump0[1][0][st][aq_features6]
     print('{}: {}'.format(st, len(dump0[1][0][st])))
 
     for st in ld_grids:
         dump0[1][1][st] = dump0[1][1][st].append(dump1[1][1][st])
-        dump0[1][1][st] = dump0[1][1][st][['StationId', 'UtcTime', 'Temperature', 'Pressure', 'Humidity', 'WindDirection', 'WindSpeed', 'Weather']]
+        dump0[1][1][st] = dump0[1][1][st][grid_features_w]
     print('{}: {}'.format(st, len(dump0[1][1][st])))
     return dump0
 
@@ -526,14 +543,19 @@ def batch_gen(indices, build_batch, bb_pars={},
 class DataBuilder(object):
     def __init__(self, pars):
         #self.raw_data = load_dump('../input/data.pkl')
+        #self.raw_data = load_dump('../input/data1.pkl')
         self.raw_data = merge_dump()
         self.fixed_feature_list = ['CityId', 'X', 'Y', 'Day', 'Month', 'Hour', 'Weekday', 'Weekofyear']
         self.dynamic_feature_list = ['PM25', 'PM10', 'O3', 'CO', 'NO2', 'SO2']
         self.n_fixed_feature = len(self.fixed_feature_list)
         self.grid_feature_list = ['X', 'Y', 'Temperature', 'Pressure', 'Humidity', 'Weather', 'WindSpeedX', 'WindSpeedY']
         self.grid_fixed = ['X', 'Y', 'WindSpeedX', 'WindSpeedY']
+        self.n_grid_fixed = len(self.grid_fixed)
         self.grid_embedding = ['Weather']
+        self.n_grid_embedding = len(self.grid_embedding)
         self.grid_dynamic = ['Temperature', 'Pressure', 'Humidity']
+        self.n_grid_dynamic = len(self.grid_dynamic)
+        self.n_grid_features = self.n_grid_fixed + self.n_grid_embedding + self.n_grid_dynamic
         self.st_list = []
         self.st_list.append(bj_stations)
         self.st_list.append(ld_stations)
@@ -609,7 +631,7 @@ class DataBuilder(object):
                 data_dict[st]['CityId'] = city
                 data_dict[st]['X'] = self.pos_list[city][k][0]
                 data_dict[st]['Y'] = self.pos_list[city][k][1]
-                dynamic_features.append(data_dict[st][self.dynamic_feature_list])
+                dynamic_features.append(data_dict[st][self.dynamic_feature_list].values)
                 fixed_features.append(data_dict[st][self.fixed_feature_list])
         self.dynamic_features = np.stack(dynamic_features)
         self.dynamic_features_mask = np.isnan(self.dynamic_features).astype(int)
@@ -628,14 +650,34 @@ class DataBuilder(object):
 
     def make_grid_features(self):
         self.grid_features = []
+        print('Making Beijing grid features ...')
         time_len = len(self.raw_data[0][1][bj_grids[0]])
-        #n_grid_features =
-        bj_grid_data = np.zeros((time_len, ))
-        for t_idx in range(time_len):
-            #todo
-            pass
+        bj_grid_feature = np.zeros((time_len, self.n_grid_features, 21, 31))
+        for k, st in enumerate(bj_grids):
+            print(st)
+            grid_data = self.raw_data[0][1][st][['X', 'Y', 'WindSpeedX', 'WindSpeedY', 'Weather', 'Temperature', 'Pressure', 'Humidity']]
+            for t_idx in range(time_len):
+                y = k % 21
+                x = k // 21
+                bj_grid_feature[t_idx, :, x, y] = grid_data.iloc[k].values
+        self.grid_features.append(bj_grid_feature)
 
-        pass
+        print('Making London grid features ...')
+        time_len = len(self.raw_data[1][1][ld_grids[0]])
+        ld_grid_feature = np.zeros((time_len, self.n_grid_features, 21, 31))
+        start = 105
+        for k in range(start, 105+651):
+            st = ld_grids[k]
+            print(st)
+            grid_data = self.raw_data[1][1][st][['X', 'Y', 'WindSpeedX', 'WindSpeedY', 'Weather', 'Temperature', 'Pressure', 'Humidity']]
+            for t_idx in range(time_len):
+                y = (k - start) % 21
+                x = (k - start) // 21
+                ld_grid_feature[t_idx, :, x, y] = grid_data.iloc[k].values
+        self.grid_features.append(ld_grid_feature)
+        return self.grid_features
+
+
 
     def build_idxes(self):
         self.idxes = []
