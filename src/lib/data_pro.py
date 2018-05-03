@@ -619,6 +619,13 @@ class DataBuilder(object):
         self.fixed_features = np.stack(fixed_features)
         self.fixed_features = np.asarray(self.fixed_features, dtype=np.float32)
 
+    def check_valid_idx(self, s_idx, t_idx):
+        nan_sum = self.dynamic_features[s_idx, t_idx:t_idx + self.decode_len, :self.n_dec_feature].sum()
+        if nan_sum == 0:
+            return False
+        else:
+            return True
+
     def make_grid_features(self):
         self.grid_features = []
         time_len = len(self.raw_data[0][1][bj_grids[0]])
@@ -639,12 +646,14 @@ class DataBuilder(object):
         self.train_idxes = []
         for s_idx in range(self.dynamic_features.shape[0]):
             for t_idx in range(self.encode_len, self.time_len-self.decode_len-self.val_to_end):
-                self.train_idxes.append((s_idx, t_idx))
+                if self.check_valid_idx(s_idx, t_idx):
+                    self.train_idxes.append((s_idx, t_idx))
 
         self.val_idxes = []
         for s_idx in range(self.dynamic_features.shape[0]):
             for t_idx in range(self.time_len-self.val_to_end-self.decode_len, self.time_len-self.decode_len):
-                self.val_idxes.append((s_idx, t_idx))
+                if self.check_valid_idx(s_idx, t_idx):
+                    self.val_idxes.append((s_idx, t_idx))
 
         self.test_idxes = []
         for s_idx in range(48):
