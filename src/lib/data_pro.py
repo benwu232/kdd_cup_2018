@@ -650,33 +650,32 @@ class DataBuilder(object):
 
     def make_grid_features(self):
         self.grid_features = []
-        print('Making Beijing grid features ...')
-        time_len = len(self.raw_data[0][1][bj_grids[0]])
-        bj_grid_feature = np.zeros((time_len, self.n_grid_features, 31, 21))
-        for k, st in enumerate(bj_grids):
-            print(st)
-            grid_data = self.raw_data[0][1][st][['X', 'Y', 'WindSpeedX', 'WindSpeedY', 'Weather', 'Temperature', 'Pressure', 'Humidity']].values
-            for t_idx in range(time_len):
-                y = k % 21
-                x = k // 21
-                bj_grid_feature[t_idx, :, x, y] = grid_data[k]
-        self.grid_features.append(bj_grid_feature)
+        print('Making grid features ...')
+        for city in (0, 1):
+            if city == 0:
+                grid_list = bj_grids
+                start = 0
+            else:
+                grid_list = ld_grids
+                start = 105
 
-        print('Making London grid features ...')
-        time_len = len(self.raw_data[1][1][ld_grids[0]])
-        ld_grid_feature = np.zeros((time_len, self.n_grid_features, 31, 21))
-        start = 105
-        for k in range(start, 105+651):
-            st = ld_grids[k]
-            print(st)
-            grid_data = self.raw_data[1][1][st][['X', 'Y', 'WindSpeedX', 'WindSpeedY', 'Weather', 'Temperature', 'Pressure', 'Humidity']].values
-            for t_idx in range(time_len):
-                y = (k - start) % 21
-                x = (k - start) // 21
-                ld_grid_feature[t_idx, :, x, y] = grid_data[k]
-        self.grid_features.append(ld_grid_feature)
+            time_len = len(self.raw_data[city][1][grid_list[0]])
+            grid_features = np.zeros((time_len, self.n_grid_features, 31, 21))
+            for k in range(start, start+651):
+                st = grid_list[k-start]
+                #print(st)
+                grid_data = self.raw_data[city][1][st][['X', 'Y', 'WindSpeedX', 'WindSpeedY', 'Weather', 'Temperature', 'Pressure', 'Humidity']].values
+                for t_idx in range(time_len):
+                    y = (k - start) % 21
+                    x = (k - start) // 21
+                    grid_features[t_idx, :, x, y] = grid_data[k]
+
+            #add nan_mask
+            grid_features_mask = np.isnan(grid_features[:, -3:, :, :]).astype(int)
+            grid_features = np.concatenate([grid_features, grid_features_mask], axis=1)
+            grid_features = np.nan_to_num(grid_features)
+            self.grid_features.append(grid_features)
         return self.grid_features
-
 
 
     def build_idxes(self):
@@ -712,11 +711,12 @@ class DataBuilder(object):
         enc_dynamic = np.zeros([batch_size, self.encode_len, self.n_dynamic_feature], dtype=np.float32)
         enc_dynamic_nan = np.zeros_like(enc_dynamic)
         enc_fixed = np.zeros([batch_size, self.encode_len, self.n_fixed_feature], dtype=np.float32)
-        y_decode = np.zeros([batch_size, self.decode_len, self.n_dec_feature], dtype=np.float32)
-        is_nan_decode = np.zeros_like(y_decode)
+        dec_targets = np.zeros([batch_size, self.decode_len, self.n_dec_feature], dtype=np.float32)
+        dec_nan = np.zeros_like(dec_targets)
         dec_fixed = np.zeros([batch_size, self.decode_len, self.n_fixed_feature], dtype=np.float32)
         encode_len = np.zeros([batch_size], dtype=np.int32)
         decode_len = np.zeros([batch_size], dtype=np.int32)
+        grid_features = np.zeros([batch_size, self.n_grid_features+self.n_grid_dynamic, 31, 21], dtype=np.float32)
 
         #print('SeqLen = {}'.format(self.past_len))
         for k, sti in enumerate(idxes):
@@ -727,9 +727,14 @@ class DataBuilder(object):
             enc_fixed[k, :self.encode_len, :] = self.fixed_features[s_idx, t_idx - self.encode_len:t_idx, :]
             encode_len[k] = self.encode_len
 
+            city = 0
+            if s_idx > 34:
+                city = 1
+            grid_features = self.grid_features[city][t_idx, :, :, :]
+
             if with_targets:
-                y_decode[k, :, :] = self.dynamic_features[s_idx, t_idx:t_idx + self.decode_len, :self.n_dec_feature]
-                is_nan_decode[k, :, :] = self.dynamic_features_mask[s_idx, t_idx:t_idx + self.decode_len, :self.n_dec_feature]
+                dec_targets[k, :, :] = self.dynamic_features[s_idx, t_idx:t_idx + self.decode_len, :self.n_dec_feature]
+                dec_nan[k, :, :] = self.dynamic_features_mask[s_idx, t_idx:t_idx + self.decode_len, :self.n_dec_feature]
                 dec_fixed[k, :, :] = self.fixed_features[s_idx, t_idx:t_idx + self.decode_len, :]
 
         #remove the tail of the dynamic features
@@ -747,9 +752,11 @@ class DataBuilder(object):
         batch['encode_len'] = encode_len
         batch['decode_len'] = decode_len
         batch['enc_dynamic_nan'] = np.asarray(enc_dynamic_nan, dtype=np.float32)
-        batch['y_decode'] = np.asarray(y_decode, dtype=np.float32)
-        batch['is_nan_decode'] = np.asarray(is_nan_decode, dtype=np.float32)
+        batch['dec_targets'] = np.asarray(dec_targets, dtype=np.float32)
+        batch['dec_nan'] = np.asarray(dec_nan, dtype=np.float32)
         batch['dec_fixed'] = np.asarray(dec_fixed, dtype=np.float32)
+        batch['enc_grid'] = np.asarray(grid_features, dtype=np.float32)
+
         return batch
 
 

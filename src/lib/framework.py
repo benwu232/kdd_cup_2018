@@ -452,21 +452,21 @@ class Seq2Seq(EncDec):
         self.enable_train(True)
         #x_encode = batch['x_encode']
         #encode_len = batch['encode_len']
-        #y_decode = batch['y_decode']
+        #dec_targets = batch['dec_targets']
         #decode_len = batch['decode_len']
         #is_nan_encode = batch['is_nan_encode']
-        #is_nan_decode = batch['is_nan_decode']
+        #dec_nan = batch['dec_nan']
         with torch.set_grad_enabled(True):
-            y_decode = Variable(torch.from_numpy(batch['y_decode'])).to(device)
-            y_decode.requires_grad_()
+            dec_targets = Variable(torch.from_numpy(batch['dec_targets'])).to(device)
+            dec_targets.requires_grad_()
             enc_dynamic = Variable(torch.from_numpy(batch['enc_dynamic'])).to(device)
             enc_dynamic.requires_grad_()
             enc_fixed = Variable(torch.from_numpy(batch['enc_fixed'])).to(device)
             enc_fixed.requires_grad_()
             enc_dynamic_nan = Variable(torch.from_numpy(batch['enc_dynamic_nan'])).to(device)
             enc_dynamic_nan.requires_grad_()
-            is_nan_decode = Variable(torch.from_numpy(batch['is_nan_decode'])).to(device)
-            is_nan_decode.requires_grad_()
+            dec_nan = Variable(torch.from_numpy(batch['dec_nan'])).to(device)
+            dec_nan.requires_grad_()
             dec_fixed = torch.from_numpy(batch['dec_fixed']).to(device)
             dec_fixed.requires_grad_()
             enc_dynamic_trans, enc_dynamic_mean = self.transform(enc_dynamic)
@@ -478,12 +478,12 @@ class Seq2Seq(EncDec):
             decoder_input = encoder_outputs[:, -1, :].unsqueeze(1)
             decoder_hidden = encoder_hidden[:self.n_dec_layers, :, :] # Use last (forward) hidden state from encoder
 
-            target_len = y_decode.shape[1]
+            target_len = dec_targets.shape[1]
             batch_size = enc_dynamic.shape[0]
             all_decoder_outputs = torch.zeros(target_len, batch_size, self.n_out, requires_grad=True)
 
             all_decoder_outputs = all_decoder_outputs.to(device)
-            target_batches = y_decode.to(device)
+            target_batches = dec_targets.to(device)
 
             use_teacher_forcing = True if random.random() < self.teacher_forcing_ratio else False
             for t in range(target_len):
@@ -500,7 +500,7 @@ class Seq2Seq(EncDec):
             # Loss calculation and backpropagation
             predictions = all_decoder_outputs.permute(1, 0, 2)
             predictions = self.inv_transform(predictions)
-            loss = self.criterion(predictions, target_batches, is_nan_decode)
+            loss = self.criterion(predictions, target_batches, dec_nan)
 
             # Zero gradients of both optimizers
             self.encoder_optimizer.zero_grad()
@@ -522,11 +522,11 @@ class Seq2Seq(EncDec):
     def validate_batch(self, batch):
         self.enable_train(False)
         with torch.no_grad():
-            y_decode = (torch.from_numpy(batch['y_decode'])).to(device)
+            dec_targets = (torch.from_numpy(batch['dec_targets'])).to(device)
             enc_dynamic = (torch.from_numpy(batch['enc_dynamic'])).to(device)
             enc_fixed = (torch.from_numpy(batch['enc_fixed'])).to(device)
             enc_dynamic_nan = (torch.from_numpy(batch['enc_dynamic_nan'])).to(device)
-            is_nan_decode = (torch.from_numpy(batch['is_nan_decode'])).to(device)
+            dec_nan = (torch.from_numpy(batch['dec_nan'])).to(device)
             dec_fixed = torch.from_numpy(batch['dec_fixed']).to(device)
             enc_dynamic_trans, enc_dynamic_mean = self.transform(enc_dynamic)
             data_batch = torch.cat([enc_fixed, enc_dynamic_trans, enc_dynamic_nan, enc_dynamic_mean], dim=2)
@@ -537,12 +537,12 @@ class Seq2Seq(EncDec):
             decoder_input = encoder_outputs[:, -1, :].unsqueeze(1)
             decoder_hidden = encoder_hidden[:self.n_dec_layers, :, :] # Use last (forward) hidden state from encoder
 
-            target_len = y_decode.shape[1]
+            target_len = dec_targets.shape[1]
             batch_size = enc_dynamic.shape[0]
             all_decoder_outputs = (torch.zeros(target_len, batch_size, self.n_out))
 
             all_decoder_outputs = all_decoder_outputs.to(device)
-            target_batches = y_decode.to(device)
+            target_batches = dec_targets.to(device)
 
             for t in range(target_len):
                 #decoder_output, decoder_hidden, decoder_attn = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
@@ -555,17 +555,15 @@ class Seq2Seq(EncDec):
             # Loss calculation and backpropagation
             predictions = all_decoder_outputs.permute(1, 0, 2)
             predictions = self.inv_transform(predictions)
-            loss = self.criterion(predictions, target_batches, is_nan_decode)
+            loss = self.criterion(predictions, target_batches, dec_nan)
             return loss.item()
 
     def predict_batch(self, batch, predict_seq_len):
         self.enable_train(False)
         with torch.no_grad():
-            y_decode = (torch.from_numpy(batch['y_decode'])).to(device)
             enc_dynamic = (torch.from_numpy(batch['enc_dynamic'])).to(device)
             enc_fixed = (torch.from_numpy(batch['enc_fixed'])).to(device)
             enc_dynamic_nan = (torch.from_numpy(batch['enc_dynamic_nan'])).to(device)
-            is_nan_decode = (torch.from_numpy(batch['is_nan_decode'])).to(device)
             dec_fixed = torch.from_numpy(batch['dec_fixed']).to(device)
             enc_dynamic_trans, enc_dynamic_mean = self.transform(enc_dynamic)
             data_batch = torch.cat([enc_fixed, enc_dynamic_trans, enc_dynamic_nan, enc_dynamic_mean], dim=2)
@@ -580,7 +578,6 @@ class Seq2Seq(EncDec):
             all_decoder_outputs = (torch.zeros(predict_seq_len, batch_size, self.n_out))
 
             all_decoder_outputs = all_decoder_outputs.to(device)
-            target_batches = y_decode.to(device)
 
             for t in range(predict_seq_len):
                 #decoder_output, decoder_hidden, decoder_attn = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
@@ -598,45 +595,5 @@ class Seq2Seq(EncDec):
     def predict(self, predict_bb, predict_seq_len):
         predict_results = super().predict(predict_bb, predict_seq_len)
         return predict_results.clip(0)
-
-    '''
-    def predict_batch(self, input_batches, predict_seq_len):
-        input_batches = Variable(input_batches, volatile=True)
-        if USE_CUDA:
-            input_batches = input_batches.cuda()
-
-        #input_batches = self.transform(input_batches)
-        input_batches[:, :, 0] = self.transform(input_batches[:, :, 0].unsqueeze(2))
-        encoder_outputs, encoder_hidden = self.encoder(input_batches, hidden=None)
-
-        # Prepare input and output variables
-        #decoder_input = Variable(torch.FloatTensor([SOS_token] * self.batch_size).view(1, -1, 1))
-        decoder_input = encoder_outputs[-1].unsqueeze(0)
-        #decoder_hidden = encoder_hidden[:self.decoder.n_layers].squeeze(0) # Use last (forward) hidden state from encoder
-        decoder_hidden = encoder_hidden[:self.decoder.n_layers*self.decoder.num_direction] # Use last (forward) hidden state from encoder
-
-        batch_size = input_batches.size(1)
-        all_decoder_outputs = Variable(torch.zeros(predict_seq_len, batch_size, self.decoder.output_size), volatile=True)
-
-        # Move new Variables to CUDA
-        if USE_CUDA:
-            all_decoder_outputs = all_decoder_outputs.cuda()
-
-        # Run through decoder one time step at a time
-        for t in range(predict_seq_len):
-            #decoder_output, decoder_hidden, decoder_attn = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
-            if self.keep_hidden:
-                decoder_output, _ = self.decoder(decoder_input, decoder_hidden)
-            else:
-                decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
-            #print(all_decoder_outputs[t].size(), decoder_output[0].size())
-            all_decoder_outputs[t] = decoder_output[0]
-            #decoder_input = target_batches[t].view(1, -1, 1) # Next input is current target
-            decoder_input = decoder_output
-
-        predictions = all_decoder_outputs.squeeze(2)
-        predictions = self.inv_transform(predictions).permute(1, 0)
-        return predictions
-    '''
 
 
