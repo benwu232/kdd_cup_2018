@@ -11,7 +11,7 @@ if __name__ == '__main__':
         batch_size = 64
         encode_len = 50
     else:
-        batch_size = 8
+        batch_size = 16
         encode_len = 720
 
     pars = {
@@ -42,7 +42,7 @@ if __name__ == '__main__':
             #'optimizer': {'type': 'SGD', 'momentum': 0.9, 'nesterov': False, 'dampening': 0.0, 'epsilon': 1e-8, 'l2_scale': 1e-2},
             #'optimizer': {'type': 'AdamW', 'beta1': 0.9, 'beta2': 0.999, 'epsilon': 1e-8, 'l2_scale': 1e-4},
         },
-        'teacher_forcing_ratio': 0.0,
+        'teacher_forcing_ratio': 1.0,
     }
 
     dg = DataBuilder(pars)

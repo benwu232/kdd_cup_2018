@@ -14,6 +14,7 @@ from tensorboard_logger import log_value as tblog_value
 from tensorboard_logger import configure as tblog_configure
 from lib.model import *
 from lib.define import *
+from lib.resnet3d import grid_res3d
 
 class SmapeLoss(torch.nn.Module):
     def __init__(self):
@@ -437,8 +438,8 @@ class Seq2Seq(EncDec):
     def __init__(self, model_pars):
         super().__init__(model_pars)
 
-        self.grid_enc = grid_res2d()
-        #self.grid_enc = grid_res3d()
+        #self.grid_enc = grid_res2d()
+        self.grid_enc = grid_res3d()
         if USE_CUDA:
             self.grid_enc.cuda()
         self.teacher_forcing_ratio = model_pars['teacher_forcing_ratio']
@@ -529,7 +530,7 @@ class Seq2Seq(EncDec):
                 #print(all_decoder_outputs[t].size(), decoder_output[0].size())
                 all_decoder_outputs[t] = decoder_output[0]
                 if use_teacher_forcing:
-                    decoder_input = target_batches[:, -1, :].view(batch_size, 1, -1)
+                    decoder_input = torch.cat([target_batches[:, t:t+1, :], dec_fixed[:, -1, :].unsqueeze(1)], dim=2)
                 else:
                     decoder_input = torch.cat([decoder_output, dec_fixed[:, -1, :].unsqueeze(1)], dim=2)      # Next input is current prediction
 
