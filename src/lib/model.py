@@ -1,6 +1,8 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision.models.resnet import *
+from torchvision.models.resnet import BasicBlock
+#from lib.resnet3d import BasicBlock, ResNet, resnet10
 
 class EncoderRnn(nn.Module):
     def __init__(self, input_size, hidden_size, n_layers=1, dropout=0.1, bidirectional=False):
@@ -58,16 +60,16 @@ class DecoderRnn(nn.Module):
         #outputs = outputs[:, :, :self.hidden_size] + outputs[:, : ,self.hidden_size:] # Sum bidirectional outputs
         return x, h
 
-
-class ResNet(nn.Module):
-    def __init__(self, block, layers, num_classes=1000):
-        self.inplanes = 64
-        super(ResNet, self).__init__()
+class ResNet2D(nn.Module):
+    def __init__(self, block, layers, num_classes=500):
+        self.inplanes = 32
+        super().__init__()
+        self.conv1 = nn.Conv2d(14, self.inplanes, kernel_size=3, stride=1, padding=1)
+        self.bn1 = nn.BatchNorm2d(self.inplanes)
+        self.relu = nn.ReLU(inplace=True)
         self.layer1 = self._make_layer(block, 16, layers[0])
-        self.layer2 = self._make_layer(block, 32, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, 16, layers[2], stride=2)
-        self.avgpool = nn.AvgPool2d(2, stride=1)
-        self.fc = nn.Linear(512 * block.expansion, num_classes)
+        self.layer2 = self._make_layer(block, 6, layers[1], stride=1)
+        self.layer3 = self._make_layer(block, 2, layers[2], stride=1)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -94,12 +96,24 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
+        x_out = []
+        for k in range(x.shape[2]):
+            y = x[:, :, k, :, :]
+            y = self.conv1(y)
+            y = self.bn1(y)
+            y = self.relu(y)
+            y = self.layer1(y)
+            y = self.layer2(y)
+            y = self.layer3(y)
+            y = y.unsqueeze(2)
+            x_out.append(y)
+        y = torch.cat(x_out, dim=2)
+        y = y.permute((0, 2, 1, 3, 4)).contiguous()
+        return y.view(y.size(0), y.size(1), -1)
 
-        x = self.avgpool(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
+def grid_res2d(**kwargs):
+    model = ResNet2D(BasicBlock, [2, 2, 2], **kwargs)
+    return model
 
-        return x
+
+

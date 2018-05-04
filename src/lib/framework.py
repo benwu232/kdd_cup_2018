@@ -13,6 +13,7 @@ from torch.optim import *
 from tensorboard_logger import log_value as tblog_value
 from tensorboard_logger import configure as tblog_configure
 from lib.model import *
+from lib.define import *
 
 class SmapeLoss(torch.nn.Module):
     def __init__(self):
@@ -38,7 +39,9 @@ class EncDec(object):
     def __init__(self, model_pars):
         self.n_dynamic_features = model_pars['n_dynamic_features']*3
         self.n_fixed_features = model_pars['n_fixed_features']
-        self.n_enc_input = self.n_dynamic_features + self.n_fixed_features
+        #self.n_grid_features = model_pars['n_grid_features']
+        self.n_grid_features = 882
+        self.n_enc_input = self.n_dynamic_features + self.n_fixed_features + self.n_grid_features
         self.n_hidden = model_pars['n_hidden']
         self.n_enc_layers = model_pars['n_enc_layers']
         self.n_dec_layers = model_pars['n_dec_layers']
@@ -46,15 +49,15 @@ class EncDec(object):
         self.n_out = 6
         self.n_dec_input = self.n_out + self.n_fixed_features
 
-        if model_pars['enc_file'] is None:
-            self.encoder = self.init_encoder()
-        else:
+        if 'enc_file' in model_pars and model_pars['enc_file']:
             self.load_encoder(model_pars['enc_file'])
-
-        if model_pars['dec_file'] is None:
-            self.decoder = self.init_decoder()
         else:
+            self.encoder = self.init_encoder()
+
+        if 'dec_file' in model_pars and model_pars['dec_file']:
             self.load_decoder(model_pars['dec_file'])
+        else:
+            self.decoder = self.init_decoder()
 
         self.clip = model_pars['clip']
         self.lr = model_pars['lr']
@@ -65,9 +68,9 @@ class EncDec(object):
 
         self.n_training_steps = 100000000
         self.loss_averaging_window = 100
-        self.log_interval = 10
+        self.log_interval = 1
         self.min_steps_to_checkpoint = 200
-        self.early_stopping_steps = 500
+        self.early_stopping_steps = 800
         self.lr_scheduler = None
         self.with_weights = False
         self.logger = init_logger(log_file='../logs/{}.log'.format(self.timestamp))
@@ -356,7 +359,7 @@ class EncDec(object):
                     "[step {:6d}]]      "
                     "[[train]]      loss: {:10.3f}     "
                     "[[val]]      loss: {:10.3f}     "
-                ).format(step, round(avg_train_loss, 3), round(val_loss, 3))
+                ).format(step, round(avg_train_loss, 3), round(avg_val_loss, 3))
                 #).format(step, round(avg_train_loss, 3), round(avg_val_loss, 3))
                 self.logger.info(metric_log)
 
@@ -364,8 +367,8 @@ class EncDec(object):
                 self.tblog_value('val_fn_loss', val_loss, step)
 
                 if step > self.min_steps_to_checkpoint:
-                    if val_loss < best_val_loss - 0.0001:
-                        best_val_loss = val_loss
+                    if avg_val_loss < best_val_loss - 0.0001:
+                        best_val_loss = avg_val_loss
                         best_val_loss_step = step
                         self.logger.info('$$$$$$$$$$$$$ Best loss {} at training step {} $$$$$$$$$'.format(best_val_loss, best_val_loss_step))
 
@@ -434,28 +437,48 @@ class Seq2Seq(EncDec):
     def __init__(self, model_pars):
         super().__init__(model_pars)
 
+        self.grid_enc = grid_res2d()
+        #self.grid_enc = grid_res3d()
+        if USE_CUDA:
+            self.grid_enc.cuda()
         self.teacher_forcing_ratio = model_pars['teacher_forcing_ratio']
+
+        if 'file_prefix' in model_pars:
+            prefix = model_pars['file_prefix']
+            self.load_model(prefix)
+
+    def load_model(self, prefix, model_dir='../clf/'):
+        enc_file = model_dir + prefix + '_enc.pth'
+        dec_file = model_dir + prefix + '_dec.pth'
+        grid_enc_file = model_dir + prefix + '_grid.pth'
+        self.encoder = torch.load(enc_file)
+        self.decoder = torch.load(dec_file)
+        self.grid_enc = torch.load(grid_enc_file)
+
+    def save_model(self, model_prefix):
+        super().save_model(model_prefix)
+        grid_enc_file = model_prefix + '_grid.pth'
+        torch.save(self.grid_enc, grid_enc_file)
 
     def transform(self, x):
         #x = torch.log1p(x)
-        self.x_mean = torch.mean(x, dim=1, keepdim=True)
-        x_trans = x - self.x_mean
-        x_mean = self.x_mean.repeat((1, x.shape[1], 1))
+        x_mean = torch.mean(x, dim=1, keepdim=True)
+        x_trans = x - x_mean
+        if len(x.shape) == 3:
+            x_mean = x_mean.repeat((1, x.shape[1], 1))
+        elif len(x.shape) == 5:
+            x_mean = x_mean.repeat((1, x.shape[1], 1, 1, 1))
+        elif len(x.shape) == 4:
+            x_mean = x_mean.repeat((1, x.shape[1], 1, 1))
         return x_trans, x_mean
 
-    def inv_transform(self, x):
-        y = x + self.x_mean
+    def inv_transform(self, x, x_mean):
+        y = x + x_mean
         #y = torch.expm1(y)
         return y
 
     def train_batch(self, batch):
         self.enable_train(True)
-        #x_encode = batch['x_encode']
-        #encode_len = batch['encode_len']
-        #dec_targets = batch['dec_targets']
-        #decode_len = batch['decode_len']
-        #is_nan_encode = batch['is_nan_encode']
-        #dec_nan = batch['dec_nan']
         with torch.set_grad_enabled(True):
             dec_targets = Variable(torch.from_numpy(batch['dec_targets'])).to(device)
             dec_targets.requires_grad_()
@@ -470,7 +493,20 @@ class Seq2Seq(EncDec):
             dec_fixed = torch.from_numpy(batch['dec_fixed']).to(device)
             dec_fixed.requires_grad_()
             enc_dynamic_trans, enc_dynamic_mean = self.transform(enc_dynamic)
-            data_batch = torch.cat([enc_fixed, enc_dynamic_trans, enc_dynamic_nan, enc_dynamic_mean], dim=2)
+            #grid features
+            grid_fixed = Variable(torch.from_numpy(batch['grid_fixed'])).to(device)
+            grid_fixed.requires_grad_()
+            grid_emb = Variable(torch.from_numpy(batch['grid_emb'])).to(device)
+            grid_emb.requires_grad_()
+            grid_dynamic = Variable(torch.from_numpy(batch['grid_dynamic'])).to(device)
+            grid_dynamic.requires_grad_()
+            grid_dynamic_nan = Variable(torch.from_numpy(batch['grid_dynamic_nan'])).to(device)
+            grid_dynamic_nan.requires_grad_()
+            grid_dynamic_trans, grid_dynamic_mean = self.transform(grid_dynamic)
+            grid_features = torch.cat([grid_fixed, grid_dynamic_trans, grid_dynamic_mean, grid_dynamic_nan, grid_emb], dim=1)
+            grid_enc_features = self.grid_enc(grid_features)
+
+            data_batch = torch.cat([enc_fixed, enc_dynamic_trans, enc_dynamic_nan, enc_dynamic_mean, grid_enc_features], dim=2)
 
             encoder_outputs, encoder_hidden = self.encoder(data_batch, None)
 
@@ -499,7 +535,7 @@ class Seq2Seq(EncDec):
 
             # Loss calculation and backpropagation
             predictions = all_decoder_outputs.permute(1, 0, 2)
-            predictions = self.inv_transform(predictions)
+            predictions = self.inv_transform(predictions, enc_dynamic_mean[:, :DECODE_STEPS, :])
             loss = self.criterion(predictions, target_batches, dec_nan)
 
             # Zero gradients of both optimizers
@@ -529,7 +565,16 @@ class Seq2Seq(EncDec):
             dec_nan = (torch.from_numpy(batch['dec_nan'])).to(device)
             dec_fixed = torch.from_numpy(batch['dec_fixed']).to(device)
             enc_dynamic_trans, enc_dynamic_mean = self.transform(enc_dynamic)
-            data_batch = torch.cat([enc_fixed, enc_dynamic_trans, enc_dynamic_nan, enc_dynamic_mean], dim=2)
+
+            grid_fixed = (torch.from_numpy(batch['grid_fixed'])).to(device)
+            grid_emb = (torch.from_numpy(batch['grid_emb'])).to(device)
+            grid_dynamic = (torch.from_numpy(batch['grid_dynamic'])).to(device)
+            grid_dynamic_nan = (torch.from_numpy(batch['grid_dynamic_nan'])).to(device)
+            grid_dynamic_trans, grid_dynamic_mean = self.transform(grid_dynamic)
+            grid_features = torch.cat([grid_fixed, grid_dynamic_trans, grid_dynamic_mean, grid_dynamic_nan, grid_emb], dim=1)
+            grid_enc_features = self.grid_enc(grid_features)
+
+            data_batch = torch.cat([enc_fixed, enc_dynamic_trans, enc_dynamic_nan, enc_dynamic_mean, grid_enc_features], dim=2)
 
             encoder_outputs, encoder_hidden = self.encoder(data_batch, None)
 
@@ -554,7 +599,7 @@ class Seq2Seq(EncDec):
 
             # Loss calculation and backpropagation
             predictions = all_decoder_outputs.permute(1, 0, 2)
-            predictions = self.inv_transform(predictions)
+            predictions = self.inv_transform(predictions, enc_dynamic_mean[:, :DECODE_STEPS, :])
             loss = self.criterion(predictions, target_batches, dec_nan)
             return loss.item()
 
@@ -566,7 +611,16 @@ class Seq2Seq(EncDec):
             enc_dynamic_nan = (torch.from_numpy(batch['enc_dynamic_nan'])).to(device)
             dec_fixed = torch.from_numpy(batch['dec_fixed']).to(device)
             enc_dynamic_trans, enc_dynamic_mean = self.transform(enc_dynamic)
-            data_batch = torch.cat([enc_fixed, enc_dynamic_trans, enc_dynamic_nan, enc_dynamic_mean], dim=2)
+
+            grid_fixed = (torch.from_numpy(batch['grid_fixed'])).to(device)
+            grid_emb = (torch.from_numpy(batch['grid_emb'])).to(device)
+            grid_dynamic = (torch.from_numpy(batch['grid_dynamic'])).to(device)
+            grid_dynamic_nan = (torch.from_numpy(batch['grid_dynamic_nan'])).to(device)
+            grid_dynamic_trans, grid_dynamic_mean = self.transform(grid_dynamic)
+            grid_features = torch.cat([grid_fixed, grid_dynamic_trans, grid_dynamic_mean, grid_dynamic_nan, grid_emb], dim=1)
+            grid_enc_features = self.grid_enc(grid_features)
+
+            data_batch = torch.cat([enc_fixed, enc_dynamic_trans, enc_dynamic_nan, enc_dynamic_mean, grid_enc_features], dim=2)
 
             encoder_outputs, encoder_hidden = self.encoder(data_batch, None)
 
@@ -589,7 +643,7 @@ class Seq2Seq(EncDec):
 
             # Loss calculation and backpropagation
             predictions = all_decoder_outputs.permute(1, 0, 2)
-            predictions = self.inv_transform(predictions)
+            predictions = self.inv_transform(predictions, enc_dynamic_mean[:, :DECODE_STEPS, :])
             return predictions
 
     def predict(self, predict_bb, predict_seq_len):

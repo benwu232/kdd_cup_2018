@@ -11,7 +11,7 @@ if __name__ == '__main__':
         batch_size = 64
         encode_len = 50
     else:
-        batch_size = 1024
+        batch_size = 8
         encode_len = 720
 
     pars = {
