@@ -339,7 +339,7 @@ class DataBuilder(object):
         self.make_aq_data()
 
         #todo: need to add other data preprocessing, e.g. 9997, a number which is too big
-        self.time_len = self.dynamic_features.shape[1]
+        self.time_len = self.dynamic_features.shape[1] - DECODE_STEPS
         self.n_dynamic_feature = self.dynamic_features.shape[-1]
         self.n_dec_feature = 6
         self.encode_len = pars['encode_len']
