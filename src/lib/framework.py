@@ -67,7 +67,7 @@ class EncDec(object):
         self.loss_averaging_window = 100
         self.log_interval = 10
         self.min_steps_to_checkpoint = 200
-        self.early_stopping_steps = 500
+        self.early_stopping_steps = 800
         self.lr_scheduler = None
         self.with_weights = False
         self.logger = init_logger(log_file='../logs/{}.log'.format(self.timestamp))
@@ -493,7 +493,7 @@ class Seq2Seq(EncDec):
                 #print(all_decoder_outputs[t].size(), decoder_output[0].size())
                 all_decoder_outputs[t] = decoder_output[0]
                 if use_teacher_forcing:
-                    decoder_input = target_batches[:, -1, :].view(batch_size, 1, -1)
+                    decoder_input = torch.cat([target_batches[:, t:t+1, :], dec_fixed[:, -1, :].unsqueeze(1)], dim=2)
                 else:
                     decoder_input = torch.cat([decoder_output, dec_fixed[:, -1, :].unsqueeze(1)], dim=2)      # Next input is current prediction
 
