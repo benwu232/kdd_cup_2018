@@ -475,7 +475,7 @@ class Seq2Seq(EncDec):
             encoder_outputs, encoder_hidden = self.encoder(data_batch, None)
 
             # Prepare input and output variables
-            decoder_input = encoder_outputs[:, -1, :].unsqueeze(1)
+            decoder_input = encoder_outputs[:, -1:, :]
             decoder_hidden = encoder_hidden[:self.n_dec_layers, :, :] # Use last (forward) hidden state from encoder
 
             target_len = y_decode.shape[1]
