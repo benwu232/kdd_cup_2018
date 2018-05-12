@@ -10,7 +10,7 @@ if __name__ == '__main__':
     if DBG:
         batch_size = 64
     else:
-        batch_size = 1024
+        batch_size = 128
 
     pars = {
         'with_tblog': True,
@@ -20,6 +20,7 @@ if __name__ == '__main__':
         'val_to_end': 800,
         #'encode_len': 960,
         #'val_to_end': 1080,
+        'dec_type': 2,
         'clip': 10,
         'lr': 0.001,
         'batch_size': batch_size,

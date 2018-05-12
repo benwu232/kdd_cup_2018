@@ -1,15 +1,25 @@
 import numpy as np
+import pandas as pd
 import datetime as dt
 import torch
 from geopy.distance import geodesic
 import logging
 import pickle
+import sklearn
+from sklearn import preprocessing
+from collections import OrderedDict
+
 
 DBG = 0
 
 DECODE_STEPS = 48
 USE_CUDA = True
 device = torch.device("cuda" if USE_CUDA else "cpu")
+
+whether_list = ['EMPTY', 'CLEAR_NIGHT', 'SNOW', 'RAIN', 'PARTLY_CLOUDY_DAY', 'HAZE',
+                'CLEAR_DAY', 'PARTLY_CLOUDY_NIGHT', 'WIND', 'CLOUDY']
+whether_le = preprocessing.LabelEncoder()
+whether_le.fit(whether_list)
 
 bj_stations = [
     'aotizhongxin_aq', 'badaling_aq', 'beibuxinqu_aq', 'daxing_aq',
@@ -24,6 +34,11 @@ bj_stations = [
 
 ld_stations = ['BL0', 'CD9', 'CD1', 'GN0', 'GR4', 'GN3', 'GR9', 'HV1', 'KF1', 'LW2', 'ST5', 'TH4',
                'MY7', 'BX9', 'BX1', 'CT2', 'CT3', 'CR8', 'GB0', 'HR1', 'LH0', 'KC1', 'RB7', 'TD5']
+#ld_stations = ['BL0', 'CD9', 'CD1', 'GN0', 'GR4', 'GN3', 'GR9', 'HV1', 'KF1', 'LW2', 'ST5', 'TH4',
+#               'MY7', 'BX9', 'BX1', 'CT2', 'CT3']
+aq_stations = bj_stations + ld_stations
+aq_le = preprocessing.LabelEncoder()
+aq_le.fit(aq_stations)
 
 bj_latitude0 = 39.0
 bj_longitude0 = 115.0
@@ -41,6 +56,49 @@ def cal_pos(point, origin):
 #print(cal_pos((39.1, 115.1), bj_origin))
 #print(cal_pos((50.6, -1.9), ld_origin))
 
+'''
+def cal_grid_pos():
+    grid_pos = OrderedDict()
+    grid_ll = []
+    grid_ll.append(pd.read_csv('../input/Beijing_grid_weather_station.csv'))
+    grid_ll.append(pd.read_csv('../input/London_grid_weather_station.csv'))
+
+    for city in (0, 1):
+        for k in range(len(grid_ll[city])):
+            station_id = grid_ll[city].StationId[k]
+            latitude = grid_ll[city].Latitude[k]
+            longitude = grid_ll[city].Longitude[k]
+            pos = cal_pos((latitude, longitude), origin_list[city])
+            grid_pos[station_id] = pos
+    return grid_pos
+'''
+
+def cal_st_pos():
+    st_pos = OrderedDict()
+    st_files = [
+           ['../input/Beijing_AirQuality_Stations_cn.csv', 0],
+           ['../input/London_AirQuality_Stations.csv', 1],
+           ['../input/Beijing_grid_weather_station.csv', 0],
+           ['../input/London_grid_weather_station.csv', 1],
+    ]
+    for file, city in st_files:
+        #print(file)
+        st_info = pd.read_csv(file)
+        for k in range(len(st_info)):
+            station_id = st_info.StationId[k]
+            latitude = st_info.Latitude[k]
+            longitude = st_info.Longitude[k]
+            pos = cal_pos((latitude, longitude), origin_list[city])
+            st_pos[station_id] = pos
+            #print(station_id, pos)
+    return st_pos
+st_pos_dict = cal_st_pos()
+
+def get_st_x(station_id):
+    return st_pos_dict[station_id][0]
+
+def get_st_y(station_id):
+    return st_pos_dict[station_id][1]
 
 def now2str(format="%Y-%m-%d_%H-%M-%S-%f"):
     return dt.datetime.now().strftime(format)
@@ -600,3 +658,14 @@ ld_grids = [
        'london_grid_852', 'london_grid_853', 'london_grid_854',
        'london_grid_855', 'london_grid_856', 'london_grid_857',
        'london_grid_858', 'london_grid_859', 'london_grid_860']
+
+
+'''
+dbg_items = 5
+if DBG:
+    bj_grids = bj_grids[:dbg_items]
+    ld_grids = ld_grids[:dbg_items]
+    bj_stations = bj_stations[:dbg_items]
+    ld_stations = ld_stations[:dbg_items]
+'''
+

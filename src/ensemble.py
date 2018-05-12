@@ -50,7 +50,7 @@ def fusion(fusion_file_list, submission_csv):
 
 
 
-scoreboard = load_dump('../clf/scoreboard.pkl')
+scoreboard = load_dump('../clf_attn/scoreboard.pkl')
 
 #predict multiple times
 for k, item in enumerate(scoreboard):

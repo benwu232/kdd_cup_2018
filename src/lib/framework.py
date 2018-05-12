@@ -42,19 +42,20 @@ class EncDec(object):
         self.n_hidden = model_pars['n_hidden']
         self.n_enc_layers = model_pars['n_enc_layers']
         self.n_dec_layers = model_pars['n_dec_layers']
+        self.dec_type = model_pars['dec_type']
         self.dropo = model_pars['dropout']
         self.n_out = 6
         self.n_dec_input = self.n_out + self.n_fixed_features
 
-        if model_pars['enc_file'] is None:
-            self.encoder = self.init_encoder()
-        else:
+        if 'enc_file' in model_pars and model_pars['enc_file']:
             self.load_encoder(model_pars['enc_file'])
-
-        if model_pars['dec_file'] is None:
-            self.decoder = self.init_decoder()
         else:
+            self.encoder = self.init_encoder()
+
+        if 'dec_file' in model_pars and model_pars['dec_file']:
             self.load_decoder(model_pars['dec_file'])
+        else:
+            self.decoder = self.init_decoder(self.dec_type)
 
         self.clip = model_pars['clip']
         self.lr = model_pars['lr']
@@ -64,7 +65,7 @@ class EncDec(object):
         self.model_file = None
 
         self.n_training_steps = 100000000
-        self.loss_averaging_window = 100
+        self.loss_averaging_window = 20
         self.log_interval = 10
         self.min_steps_to_checkpoint = 200
         self.early_stopping_steps = 800
@@ -110,11 +111,20 @@ class EncDec(object):
             self.criterion = SmapeLoss()
 
     def init_encoder(self):
-        self.encoder = EncoderRnn(self.n_enc_input, self.n_hidden, self.n_enc_layers, dropout=self.dropo)
+        self.encoder = EncoderRNN(self.n_enc_input, self.n_hidden, self.n_enc_layers, dropout=self.dropo)
         return self.encoder
 
-    def init_decoder(self):
-        self.decoder = DecoderRnn(self.n_dec_input, self.n_hidden, self.n_out, self.n_dec_layers, dropout=self.dropo)
+    def init_decoder(self, type=0):
+        if type == 0:
+            self.decoder = DecoderRNN(self.n_dec_input, self.n_hidden, self.n_out, self.n_dec_layers, dropout=self.dropo)
+        elif type == 1:
+            self.decoder = AttnDecoderRNN(attn_model='general', hidden_size=self.n_hidden, output_size=self.n_out, n_layers=self.n_dec_layers, dropout_p=self.dropo)
+        elif type == 2:
+            self.decoder = LuongAttnDecoderRNN(attn_model='general', input_size=self.n_dec_input,
+                                               hidden_size=self.n_hidden, output_size=self.n_out,
+                                               n_layers=self.n_dec_layers, dropout_p=self.dropo)
+
+
         return self.decoder
 
     def save_model(self, model_prefix):
@@ -226,59 +236,11 @@ class EncDec(object):
         active_model(self.decoder)
         self.set_optimizer(self.decoder, pars['decoder']['optimizer'])
 
-    def run_train(self, train_bb, validate_bb, epochs=10, **kwargs):
-        kf = ''
-        if 'kf' in kwargs:
-            kf = '_kf{}_'.format(kwargs['kf'])
-        prefix = 'wtf_' + self.timestamp + kf
-
-        save_freq = 0
-        if 'save_freq' in kwargs:
-            save_freq = int(kwargs['save_freq'])
-
-        tblg.configure('../output/tblog/{}'.format(self.timestamp), flush_secs=10)
-
-        #tq = tqdm(range(1, epochs + 1), unit='epoch')
-        for epoch in range(1, epochs + 1):
-            self.reconfig_model(config_file)
-            if self.enc_freeze_span[0] <= epoch <= self.enc_freeze_span[1]:
-                print('Freeze encoder')
-                logging.info('Freeze encoder')
-                freeze_model(self.encoder)
-            else:
-                print('Active encoder')
-                logging.info('Active encoder')
-                active_model(self.encoder)
-
-            print(dt.datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f"))
-            print('************************ Training epoch {} *******************************'.format(epoch))
-            logging.info('************************ Training epoch {} *******************************'.format(epoch))
-            #tq.set_description('Epoch %i/%i' % (epoch, epochs))
-            train_loss = self.train(train_bb)
-            tblg.log_value('train_loss', train_loss, epoch)
-            logging.info('Training loss: {}'.format(train_loss))
-            #print('Epoch {}, training loss: {}'.format(epoch, train_loss[0]))
-            validate_score = self.validate(validate_bb)
-            tblg.log_value('validate_smape', validate_score, epoch)
-            print('Validation Smape score: {}'.format(validate_score))
-            logging.info('Validation Smape score: {}'.format(validate_score))
-            #tq.set_postfix(train_loss=train_loss, validate_smape=validate_score)
-
-            if save_freq > 0 and epoch % save_freq == 0:
-                enc_model_file = prefix + str(epoch) + '_enc.pth'
-                dec_model_file = prefix + str(epoch) + '_dec.pth'
-                print('Save model to files: {}, {}'.format(enc_model_file, dec_model_file))
-                logging.info('Save model to files: {}, {}'.format(enc_model_file, dec_model_file))
-                self.save_model(enc_model_file, dec_model_file)
-
-            print('\n\n')
-            logging.info('\n\n')
-
     def fit(self, TrainGen, ValGen, kwargs={}):
         #summary = torch_summarize_df((self.model.n_features, self.model.past_len), self.model)
         #self.logger.info(summary)
         #self.logger.info('total trainable parameters: {}'.format(summary['nb_params'].sum()))
-        clf_dir = '../clf/'
+        clf_dir = '../clf_attn/'
 
         max_score = 1.0
         sb_len = 11
@@ -356,7 +318,7 @@ class EncDec(object):
                     "[step {:6d}]]      "
                     "[[train]]      loss: {:10.3f}     "
                     "[[val]]      loss: {:10.3f}     "
-                ).format(step, round(avg_train_loss, 3), round(val_loss, 3))
+                ).format(step, round(avg_train_loss, 3), round(avg_val_loss, 3))
                 #).format(step, round(avg_train_loss, 3), round(avg_val_loss, 3))
                 self.logger.info(metric_log)
 
@@ -364,8 +326,8 @@ class EncDec(object):
                 self.tblog_value('val_fn_loss', val_loss, step)
 
                 if step > self.min_steps_to_checkpoint:
-                    if val_loss < best_val_loss - 0.0001:
-                        best_val_loss = val_loss
+                    if avg_val_loss < best_val_loss - 0.0001:
+                        best_val_loss = avg_val_loss
                         best_val_loss_step = step
                         self.logger.info('$$$$$$$$$$$$$ Best loss {} at training step {} $$$$$$$$$'.format(best_val_loss, best_val_loss_step))
 
@@ -436,15 +398,31 @@ class Seq2Seq(EncDec):
 
         self.teacher_forcing_ratio = model_pars['teacher_forcing_ratio']
 
+        if 'file_prefix' in model_pars:
+            prefix = model_pars['file_prefix']
+            self.load_model(prefix)
+
+    def load_model(self, prefix, model_dir='../clf/'):
+        enc_file = model_dir + prefix + '_enc.pth'
+        dec_file = model_dir + prefix + '_dec.pth'
+        self.encoder = torch.load(enc_file)
+        self.decoder = torch.load(dec_file)
+
+    def save_model(self, model_prefix):
+        enc_file = model_prefix + '_enc.pth'
+        dec_file = model_prefix + '_dec.pth'
+        torch.save(self.encoder, enc_file)
+        torch.save(self.decoder, dec_file)
+
     def transform(self, x):
         #x = torch.log1p(x)
-        self.x_mean = torch.mean(x, dim=1, keepdim=True)
-        x_trans = x - self.x_mean
-        x_mean = self.x_mean.repeat((1, x.shape[1], 1))
+        x_mean = torch.mean(x, dim=1, keepdim=True)
+        x_trans = x - x_mean
+        #x_mean = self.x_mean.repeat((1, x.shape[1], 1, 1))
         return x_trans, x_mean
 
-    def inv_transform(self, x):
-        y = x + self.x_mean
+    def inv_transform(self, x, x_mean):
+        y = x + x_mean[:, :, :x.shape[2]]
         #y = torch.expm1(y)
         return y
 
@@ -470,6 +448,8 @@ class Seq2Seq(EncDec):
             dec_fixed = torch.from_numpy(batch['dec_fixed']).to(device)
             dec_fixed.requires_grad_()
             enc_dynamic_trans, enc_dynamic_mean = self.transform(enc_dynamic)
+            time_len = enc_dynamic_trans.shape[1]
+            enc_dynamic_mean = enc_dynamic_mean.repeat(1, time_len, 1)
             data_batch = torch.cat([enc_fixed, enc_dynamic_trans, enc_dynamic_nan, enc_dynamic_mean], dim=2)
 
             encoder_outputs, encoder_hidden = self.encoder(data_batch, None)
@@ -487,8 +467,8 @@ class Seq2Seq(EncDec):
 
             use_teacher_forcing = True if random.random() < self.teacher_forcing_ratio else False
             for t in range(target_len):
-                #decoder_output, decoder_hidden, decoder_attn = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
-                decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
+                #decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
+                decoder_output, decoder_hidden, context, attn_weights = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
 
                 #print(predictions[t].size(), decoder_output[0].size())
                 predictions[:, t, :] = decoder_output[:, 0, :]
@@ -499,7 +479,7 @@ class Seq2Seq(EncDec):
 
             # Loss calculation and backpropagation
             #predictions = predictions.permute(1, 0, 2)
-            predictions = self.inv_transform(predictions)
+            predictions = self.inv_transform(predictions, enc_dynamic_mean[:, :1, :])
             loss = self.criterion(predictions, target_batches, is_nan_decode)
 
             # Zero gradients of both optimizers
@@ -511,8 +491,8 @@ class Seq2Seq(EncDec):
             #    print(param.grad.data.sum())
 
             # Clip gradient norms
-            enc_clip = torch.nn.utils.clip_grad_norm(self.encoder.parameters(), self.clip)
-            dec_clip = torch.nn.utils.clip_grad_norm(self.decoder.parameters(), self.clip)
+            enc_clip = torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), self.clip)
+            dec_clip = torch.nn.utils.clip_grad_norm_(self.decoder.parameters(), self.clip)
 
             # Update parameters with optimizers
             self.encoder_optimizer.step()
@@ -529,6 +509,8 @@ class Seq2Seq(EncDec):
             is_nan_decode = (torch.from_numpy(batch['is_nan_decode'])).to(device)
             dec_fixed = torch.from_numpy(batch['dec_fixed']).to(device)
             enc_dynamic_trans, enc_dynamic_mean = self.transform(enc_dynamic)
+            time_len = enc_dynamic_trans.shape[1]
+            enc_dynamic_mean = enc_dynamic_mean.repeat(1, time_len, 1)
             data_batch = torch.cat([enc_fixed, enc_dynamic_trans, enc_dynamic_nan, enc_dynamic_mean], dim=2)
 
             encoder_outputs, encoder_hidden = self.encoder(data_batch, None)
@@ -545,15 +527,15 @@ class Seq2Seq(EncDec):
             target_batches = y_decode.to(device)
 
             for t in range(target_len):
-                #decoder_output, decoder_hidden, decoder_attn = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
-                decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
+                #decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
+                decoder_output, decoder_hidden, context, attn_weights = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
 
                 #print(all_decoder_outputs[t].size(), decoder_output[0].size())
                 predictions[:, t, :] = decoder_output[:, 0, :]
                 decoder_input = torch.cat([decoder_output, dec_fixed[:, -1, :].unsqueeze(1)], dim=2)      # Next input is current prediction
 
             # Loss calculation and backpropagation
-            predictions = self.inv_transform(predictions)
+            predictions = self.inv_transform(predictions, enc_dynamic_mean[:, :1, :])
             loss = self.criterion(predictions, target_batches, is_nan_decode)
             return loss.item()
 
