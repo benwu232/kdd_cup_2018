@@ -576,7 +576,7 @@ class Seq2Seq(EncDec):
             decoder_hidden = encoder_hidden[:self.n_dec_layers, :, :] # Use last (forward) hidden state from encoder
 
             batch_size = enc_dynamic.shape[0]
-            predictions = torch.zeros(batch_size, predict_seq_len, self.n_out, requires_grad=True)
+            predictions = torch.zeros(batch_size, predict_seq_len, self.n_out, requires_grad=False)
             predictions = predictions.to(device)
 
             for t in range(predict_seq_len):
