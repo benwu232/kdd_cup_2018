@@ -26,9 +26,9 @@ if __name__ == '__main__':
         'n_dynamic_features': 6,
         'n_fixed_features': 8,
         'n_hidden': 100,
-        'n_enc_layers': 1,
-        'n_dec_layers': 1,
-        'dropout': 0.3,
+        'n_enc_layers': 2,
+        'n_dec_layers': 2,
+        'dropout': 0.5,
         'loss_type': 'SMAPE',
         'encoder': {
             'optimizer': {'type': 'Adam', 'beta1': 0.9, 'beta2': 0.999, 'epsilon': 1e-8, 'l2_scale': 1e-2, 'amsgrad': False},
