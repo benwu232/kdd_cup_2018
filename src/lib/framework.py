@@ -539,7 +539,7 @@ class Seq2Seq(EncDec):
 
             target_len = y_decode.shape[1]
             batch_size = enc_dynamic.shape[0]
-            predictions = torch.zeros(batch_size, target_len, self.n_out, requires_grad=True)
+            predictions = torch.zeros(batch_size, target_len, self.n_out, requires_grad=False)
 
             predictions = predictions.to(device)
             target_batches = y_decode.to(device)
