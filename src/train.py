@@ -11,13 +11,14 @@ if __name__ == '__main__':
         batch_size = 64
     else:
         batch_size = 128
+        batch_size = 256
 
     pars = {
         'with_tblog': True,
         'enc_file': None,
         'dec_file': None,
-        'encode_len': 240,
-        'val_to_end': 320,
+        'encode_len': 120,
+        'val_to_end': 240,
         #'encode_len': 960,
         #'val_to_end': 1080,
         'dec_type': 1,
@@ -31,7 +32,8 @@ if __name__ == '__main__':
         'n_dec_layers': 2,
         'dropout': 0.5,
         'log_interval': 10,
-        'early_stopping_steps': 3000,
+        'min_steps_to_checkpoint': 100,
+        'early_stopping_steps': 1000,
         'loss_type': 'SMAPE',
         'encoder': {
             'optimizer': {'type': 'Adam', 'beta1': 0.9, 'beta2': 0.999, 'epsilon': 1e-8, 'l2_scale': 1e-2, 'amsgrad': False},

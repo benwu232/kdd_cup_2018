@@ -96,6 +96,7 @@ class Attn(nn.Module):
         #for k in range(seq_len-24, seq_len):
         #    attn_energies[:, k] = self.cal_energy_batch(hidden[:, 0], encoder_outputs[:, k])
 
+        #for k in range(seq_len-240, seq_len):
         for k in range(seq_len):
             attn_energies[:, k] = self.cal_energy_batch(hidden, encoder_outputs[:, k])
 

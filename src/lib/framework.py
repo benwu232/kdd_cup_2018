@@ -67,7 +67,7 @@ class EncDec(object):
         self.n_training_steps = 100000000
         self.loss_averaging_window = 20
         self.log_interval = model_pars['log_interval']
-        self.min_steps_to_checkpoint = 200
+        self.min_steps_to_checkpoint = model_pars['min_steps_to_checkpoint']
         self.early_stopping_steps = model_pars['early_stopping_steps']
         self.lr_scheduler = None
         self.with_weights = False
