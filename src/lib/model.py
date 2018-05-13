@@ -137,6 +137,42 @@ class Attn(nn.Module):
             return energy
 
 
+class AttnPos(Attn):
+    def __init__(self, method, hidden_size):
+        super().__init__(method, hidden_size)
+
+    def forward(self, hidden, encoder_outputs):
+        seq_len = encoder_outputs.size(1)
+        batch_size = encoder_outputs.size(0)
+#         print('[attn] seq len', seq_len)
+#         print('[attn] encoder_outputs', encoder_outputs.size()) # S x B x N
+#         print('[attn] hidden', hidden.size()) # S=1 x B x N
+
+        # Create variable to store attention energies
+        attn_energies = torch.zeros(batch_size, seq_len, ).to(device) # B x S
+
+        # For each batch of encoder outputs
+        #for k in range(seq_len-1, 0, -24):
+        #for k in range(seq_len-1, seq_len-7*24, -3):
+        #for k in range(seq_len-7*24, seq_len):
+            #attn_energies[:, k] = self.cal_energy_batch(hidden[:, 0], encoder_outputs[:, k])
+        #    attn_energies[:, k] = self.cal_energy_batch(hidden, encoder_outputs[:, k])
+
+        #for k in range(seq_len-24, seq_len):
+        #    attn_energies[:, k] = self.cal_energy_batch(hidden[:, 0], encoder_outputs[:, k])
+
+        #for k in range(seq_len-240, seq_len):
+        for k in range(seq_len):
+            attn_energies[:, k] = self.cal_energy_batch(hidden, encoder_outputs[:, k])
+
+        # Normalize energies to weights in range 0 to 1, resize to 1 x B x S
+        attn_score = F.softmax(attn_energies, dim=1)
+        #attn_score = F.softmax(attn_energies).unsqueeze(1)
+        return attn_score
+
+
+
+
 class BahdanauAttnDecoderRNN(nn.Module):
     def __init__(self, attn_model, input_size, hidden_size, output_size, n_layers=1, dropout_p=0., bidirectional=False):
         super().__init__()
@@ -154,7 +190,6 @@ class BahdanauAttnDecoderRNN(nn.Module):
             self.num_direction = 2
 
         # Define layers
-        self.filter = nn.Linear(self.input_size+self.hidden_size, hidden_size)
         self.rnn1 = nn.GRU(self.input_size+self.hidden_size, hidden_size, n_layers, dropout=dropout_p, bidirectional=self.bidirectional, batch_first=True)
         self.rnn2 = nn.GRU(hidden_size*2, hidden_size, n_layers, dropout=dropout_p, bidirectional=self.bidirectional, batch_first=True)
         self.out = nn.Linear(hidden_size * 2, output_size)
@@ -175,8 +210,6 @@ class BahdanauAttnDecoderRNN(nn.Module):
         # Combine embedded input word and attended context, run through RNN
         input_seq = torch.cat((decoder_input, context), 2)
         if input_seq.shape[-1] != self.hidden_size*2:
-            #input_seq = self.filter(input_seq)
-            #hidden = last_hidden
             input_seq, hidden = self.rnn1(input_seq, last_hidden)
             if self.bidirectional:
                 input_seq = input_seq[:, :, :self.hidden_size] + input_seq[:, :, self.hidden_size:] # Sum bidirectional outputs
