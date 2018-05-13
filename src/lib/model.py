@@ -84,17 +84,20 @@ class Attn(nn.Module):
 #         print('[attn] hidden', hidden.size()) # S=1 x B x N
 
         # Create variable to store attention energies
-        attn_energies = torch.zeros(batch_size, seq_len).to(device) # B x S
+        attn_energies = torch.zeros(batch_size, seq_len, ).to(device) # B x S
 
         # For each batch of encoder outputs
         #for k in range(seq_len-1, 0, -24):
-        for k in range(seq_len-1, seq_len-7*24, -3):
-            attn_energies[:, k] = self.cal_energy_batch(hidden[:, 0], encoder_outputs[:, k])
+        #for k in range(seq_len-1, seq_len-7*24, -3):
+        #for k in range(seq_len-7*24, seq_len):
+            #attn_energies[:, k] = self.cal_energy_batch(hidden[:, 0], encoder_outputs[:, k])
+        #    attn_energies[:, k] = self.cal_energy_batch(hidden, encoder_outputs[:, k])
+
         #for k in range(seq_len-24, seq_len):
         #    attn_energies[:, k] = self.cal_energy_batch(hidden[:, 0], encoder_outputs[:, k])
 
-        #for k in range(seq_len):
-        #    attn_energies[:, k] = self.cal_energy_batch(hidden[:, 0], encoder_outputs[:, k])
+        for k in range(seq_len):
+            attn_energies[:, k] = self.cal_energy_batch(hidden, encoder_outputs[:, k])
 
         # Normalize energies to weights in range 0 to 1, resize to 1 x B x S
         attn_score = F.softmax(attn_energies, dim=1)
@@ -108,8 +111,9 @@ class Attn(nn.Module):
 
         elif self.method == 'general':
             energy = self.attn(encoder_output)
-            energy = torch.bmm(energy.unsqueeze(1), hidden.unsqueeze(2))[:, 0, 0]
-            return energy
+            #energy = torch.bmm(energy.unsqueeze(1), hidden.permute(1, 2, 0))[:, 0, 0]
+            energy = torch.bmm(energy.unsqueeze(1), hidden.permute(1, 2, 0))#[:, 0, 0]
+            return energy.sum(dim=2).sum(dim=1)
 
         elif self.method == 'concat':
             energy = self.attn(torch.cat((hidden, encoder_output), 1))
@@ -132,47 +136,58 @@ class Attn(nn.Module):
             return energy
 
 
-class AttnDecoderRNN(nn.Module):
-    def __init__(self, attn_model, hidden_size, output_size, n_layers=1, dropout_p=0.1):
+class BahdanauAttnDecoderRNN(nn.Module):
+    def __init__(self, attn_model, input_size, hidden_size, output_size, n_layers=1, dropout_p=0., bidirectional=False):
         super().__init__()
 
         # Keep parameters for reference
         self.attn_model = attn_model
+        self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.n_layers = n_layers
         self.dropout_p = dropout_p
+        self.bidirectional = bidirectional
+        self.num_direction = 1
+        if self.bidirectional == True:
+            self.num_direction = 2
 
         # Define layers
-        self.embedding = nn.Embedding(output_size, hidden_size)
-        self.gru = nn.GRU(hidden_size * 2, hidden_size, n_layers, dropout=dropout_p, batch_first=True)
+        self.filter = nn.Linear(self.input_size+self.hidden_size, hidden_size)
+        self.rnn1 = nn.GRU(self.input_size+self.hidden_size, hidden_size, n_layers, dropout=dropout_p, bidirectional=self.bidirectional, batch_first=True)
+        self.rnn2 = nn.GRU(hidden_size*2, hidden_size, n_layers, dropout=dropout_p, bidirectional=self.bidirectional, batch_first=True)
         self.out = nn.Linear(hidden_size * 2, output_size)
+        self.fc = nn.Linear(self.hidden_size * self.num_direction, self.output_size)
 
         # Choose attention model
         if attn_model != 'none':
             self.attn = Attn(attn_model, hidden_size)
 
-    def forward(self, word_input, last_context, last_hidden, encoder_outputs):
+    def forward(self, decoder_input, last_hidden, encoder_outputs):
         # Note: we run this one step at a time
 
-        # Get the embedding of the current input word (last output word)
-        word_embedded = self.embedding(word_input).view(1, 1, -1) # S=1 x B x N
+        # Calculate attention weights and apply to encoder outputs
+        attn_weights = self.attn(last_hidden, encoder_outputs)
+        attn_weights = attn_weights.unsqueeze(1)
+        context = attn_weights.bmm(encoder_outputs) # B x 1 x N
 
-        # Combine embedded input word and last context, run through RNN
-        rnn_input = torch.cat((word_embedded, last_context.unsqueeze(0)), 2)
-        rnn_output, hidden = self.gru(rnn_input, last_hidden)
+        # Combine embedded input word and attended context, run through RNN
+        input_seq = torch.cat((decoder_input, context), 2)
+        if input_seq.shape[-1] != self.hidden_size*2:
+            #input_seq = self.filter(input_seq)
+            #hidden = last_hidden
+            input_seq, hidden = self.rnn1(input_seq, last_hidden)
+            if self.bidirectional:
+                input_seq = input_seq[:, :, :self.hidden_size] + input_seq[:, :, self.hidden_size:] # Sum bidirectional outputs
+            rnn_output = input_seq
+        else:
+            rnn_output, hidden = self.rnn2(input_seq, last_hidden)
 
-        # Calculate attention from current RNN state and all encoder outputs; apply to encoder outputs
-        attn_weights = self.attn(rnn_output.squeeze(0), encoder_outputs)
-        context = attn_weights.bmm(encoder_outputs.transpose(0, 1)) # B x 1 x N
-
-        # Final output layer (next word prediction) using the RNN hidden state and context vector
-        rnn_output = rnn_output.squeeze(0) # S=1 x B x N -> B x N
-        context = context.squeeze(1)       # B x S=1 x N -> B x N
-        output = F.log_softmax(self.out(torch.cat((rnn_output, context), 1)))
+        # Final output layer
+        output = self.fc(rnn_output)
 
         # Return final output, hidden state, and attention weights (for visualization)
-        return output, context, hidden, attn_weights
+        return output, hidden, context, attn_weights
 
 
 class LuongAttnDecoderRNN(nn.Module):

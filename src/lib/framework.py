@@ -66,9 +66,9 @@ class EncDec(object):
 
         self.n_training_steps = 100000000
         self.loss_averaging_window = 20
-        self.log_interval = 10
+        self.log_interval = model_pars['log_interval']
         self.min_steps_to_checkpoint = 200
-        self.early_stopping_steps = 800
+        self.early_stopping_steps = model_pars['early_stopping_steps']
         self.lr_scheduler = None
         self.with_weights = False
         self.logger = init_logger(log_file='../logs/{}.log'.format(self.timestamp))
@@ -118,7 +118,9 @@ class EncDec(object):
         if type == 0:
             self.decoder = DecoderRNN(self.n_dec_input, self.n_hidden, self.n_out, self.n_dec_layers, dropout=self.dropo)
         elif type == 1:
-            self.decoder = AttnDecoderRNN(attn_model='general', hidden_size=self.n_hidden, output_size=self.n_out, n_layers=self.n_dec_layers, dropout_p=self.dropo)
+            self.decoder = BahdanauAttnDecoderRNN(attn_model='general', input_size=self.n_dec_input,
+                                                  hidden_size=self.n_hidden, output_size=self.n_out,
+                                                  n_layers=self.n_dec_layers, dropout_p=self.dropo)
         elif type == 2:
             self.decoder = LuongAttnDecoderRNN(attn_model='general', input_size=self.n_dec_input,
                                                hidden_size=self.n_hidden, output_size=self.n_out,
