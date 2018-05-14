@@ -3,8 +3,74 @@ import torch.nn as nn
 import torch.nn.functional as F
 from lib.define import *
 
+def transform(x):
+    #x = torch.log1p(x)
+    x_mean = torch.mean(x, dim=1, keepdim=True)
+    x_trans = x - x_mean
+    #x_mean = self.x_mean.repeat((1, x.shape[1], 1, 1))
+    return x_trans, x_mean
+
 
 class EncoderRNN(nn.Module):
+    def __init__(self, input_size, hidden_size, n_layers=1, dropout=0.1, bidirectional=False):
+        super().__init__()
+
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.n_layers = n_layers
+        self.dropout = dropout
+        self.bidirectional = bidirectional
+        #self.conv1 = ResBac(self.input_size, self.hidden_size, kernel_size=3, stride=1, using_bn=False, padding=1, res=False)
+        self.emb_aqst_enc = nn.Embedding(len(aq_stations), 3)
+        self.emb_weather_enc = nn.Embedding(len(whether_list), 2)
+        self.rnn1 = nn.GRU(input_size, hidden_size, n_layers, dropout=self.dropout, bidirectional=self.bidirectional, batch_first=True)
+
+    def forward(self, batch, hidden=None):
+        with torch.set_grad_enabled(True):
+            enc_dynamic = torch.from_numpy(batch['enc_dynamic']).to(device)
+            enc_dynamic.requires_grad_()
+            enc_dynamic_nan = torch.from_numpy(batch['enc_dynamic_nan']).to(device)
+            enc_dynamic_nan.requires_grad_()
+            enc_fixed = torch.from_numpy(batch['enc_fixed']).to(device)
+            enc_fixed.requires_grad_()
+            enc_emb = torch.from_numpy(batch['enc_emb'][:, :, 0]).to(device)
+            enc_emb.requires_grad_()
+
+            enc_dynamic_trans, enc_dynamic_mean = transform(enc_dynamic)
+            time_len = enc_dynamic_trans.shape[1]
+            enc_dynamic_mean = enc_dynamic_mean.repeat(1, time_len, 1)
+
+            emb_aqst = self.emb_aqst_enc(enc_emb.long())
+            input_seqs = torch.cat([enc_fixed, enc_dynamic_trans, enc_dynamic_nan, enc_dynamic_mean, emb_aqst], dim=2)
+            outputs, hidden = self.rnn1(input_seqs, hidden)
+            if self.bidirectional:
+                outputs = outputs[:, :, :self.hidden_size] + outputs[:, :, self.hidden_size:] # Sum bidirectional outputs
+            return outputs, hidden, enc_dynamic_mean
+
+
+class EncoderRNN2(nn.Module):
+    def __init__(self, input_size, hidden_size, n_layers=1, dropout=0.1, bidirectional=False):
+        super().__init__()
+
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.n_layers = n_layers
+        self.dropout = dropout
+        self.bidirectional = bidirectional
+        #self.conv1 = ResBac(self.input_size, self.hidden_size, kernel_size=3, stride=1, using_bn=False, padding=1, res=False)
+        self.emb_aqst_enc = nn.Embedding(len(aq_stations), 3)
+        self.emb_weather_enc = nn.Embedding(len(whether_list), 2)
+        self.rnn1 = nn.GRU(input_size, hidden_size, n_layers, dropout=self.dropout, bidirectional=self.bidirectional, batch_first=True)
+
+    def forward(self, input_seqs, hidden=None):
+        emb_aqst = self.emb_aqst_enc(input_seqs[:, :, -1].long())
+        input_seqs = torch.cat([input_seqs[:, :, :-1], emb_aqst], dim=2)
+        outputs, hidden = self.rnn1(input_seqs, hidden)
+        if self.bidirectional:
+            outputs = outputs[:, :, :self.hidden_size] + outputs[:, :, self.hidden_size:] # Sum bidirectional outputs
+        return outputs, hidden
+
+class EncoderRNN1(nn.Module):
     def __init__(self, input_size, hidden_size, n_layers=1, dropout=0.1, bidirectional=False):
         super().__init__()
 
@@ -62,9 +128,9 @@ class DecoderRNN(nn.Module):
 
 
 ############################ Attention model ############################################################
-class Attn(nn.Module):
+class TimeAttn(nn.Module):
     def __init__(self, method, hidden_size):
-        super(Attn, self).__init__()
+        super(TimeAttn, self).__init__()
 
         self.method = method
         self.hidden_size = hidden_size
@@ -137,7 +203,7 @@ class Attn(nn.Module):
             return energy
 
 
-class AttnPos(Attn):
+class SpaceAttn(TimeAttn):
     def __init__(self, method, hidden_size):
         super().__init__(method, hidden_size)
 
@@ -197,31 +263,50 @@ class BahdanauAttnDecoderRNN(nn.Module):
 
         # Choose attention model
         if attn_model != 'none':
-            self.attn = Attn(attn_model, hidden_size)
+            self.time_attn = TimeAttn(attn_model, hidden_size)
 
-    def forward(self, decoder_input, last_hidden, encoder_outputs):
+    def forward(self, decoder_input, last_hidden, encoder_outputs, batch):
         # Note: we run this one step at a time
+        with torch.set_grad_enabled(True):
+            enc_dynamic_all = torch.from_numpy(batch['enc_dynamic_all']).to(device)
+            enc_dynamic_all.requires_grad_()
+            enc_dynamic_nan_all = torch.from_numpy(batch['enc_dynamic_nan_all']).to(device)
+            enc_dynamic_nan_all.requires_grad_()
+            enc_fixed_all = torch.from_numpy(batch['enc_fixed_all']).to(device)
+            enc_fixed_all.requires_grad_()
+            enc_emb_all = torch.from_numpy(batch['enc_emb_all']).to(device)
+            enc_emb_all.requires_grad_()
 
-        # Calculate attention weights and apply to encoder outputs
-        attn_weights = self.attn(last_hidden, encoder_outputs)
-        attn_weights = attn_weights.unsqueeze(1)
-        context = attn_weights.bmm(encoder_outputs) # B x 1 x N
+            dec_targets = torch.from_numpy(batch['dec_targets']).to(device)
+            dec_targets.requires_grad_()
+            dec_targets_nan = torch.from_numpy(batch['dec_targets_nan']).to(device)
+            dec_targets_nan.requires_grad_()
+            dec_fixed = torch.from_numpy(batch['dec_fixed']).to(device)
+            dec_fixed.requires_grad_()
 
-        # Combine embedded input word and attended context, run through RNN
-        input_seq = torch.cat((decoder_input, context), 2)
-        if input_seq.shape[-1] != self.hidden_size*2:
-            input_seq, hidden = self.rnn1(input_seq, last_hidden)
-            if self.bidirectional:
-                input_seq = input_seq[:, :, :self.hidden_size] + input_seq[:, :, self.hidden_size:] # Sum bidirectional outputs
-            rnn_output = input_seq
-        else:
-            rnn_output, hidden = self.rnn2(input_seq, last_hidden)
+            enc_dynamic_trans_all, enc_dynamic_mean_all = transform(enc_dynamic_all)
+            # Calculate space attention weights
 
-        # Final output layer
-        output = self.fc(rnn_output)
+            # Calculate time attention weights and apply to encoder outputs
+            attn_weights = self.time_attn(last_hidden, encoder_outputs)
+            attn_weights = attn_weights.unsqueeze(1)
+            context = attn_weights.bmm(encoder_outputs) # B x 1 x F
 
-        # Return final output, hidden state, and attention weights (for visualization)
-        return output, hidden, context, attn_weights
+            # Combine embedded input word and attended context, run through RNN
+            input_seq = torch.cat((decoder_input, context), 2)
+            if input_seq.shape[-1] != self.hidden_size*2:
+                input_seq, hidden = self.rnn1(input_seq, last_hidden)
+                if self.bidirectional:
+                    input_seq = input_seq[:, :, :self.hidden_size] + input_seq[:, :, self.hidden_size:] # Sum bidirectional outputs
+                rnn_output = input_seq
+            else:
+                rnn_output, hidden = self.rnn2(input_seq, last_hidden)
+
+            # Final output layer
+            output = self.fc(rnn_output)
+
+            # Return final output, hidden state, and attention weights (for visualization)
+            return output, hidden, context, attn_weights
 
 
 class LuongAttnDecoderRNN(nn.Module):
@@ -252,7 +337,7 @@ class LuongAttnDecoderRNN(nn.Module):
 
         # Choose attention model
         if attn_model != 'none':
-            self.attn = Attn(attn_model, hidden_size)
+            self.attn = TimeAttn(attn_model, hidden_size)
 
     def forward1(self, input_seq, last_hidden, encoder_outputs):
         # Note: we run this one step at a time (in order to do teacher forcing)
