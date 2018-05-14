@@ -329,21 +329,32 @@ class DataBuilder(object):
     def __init__(self, pars):
         #self.data = build_bj_st()
         self.raw_data = load_dump('../input/data_aq.pkl')
+        #label_encoding StationId
+        for city in (0, 1):
+            for st in self.raw_data[city][0].keys():
+                self.raw_data[city][0][st].StationId = aq_le.transform(self.raw_data[city][0][st].StationId)
+
         self.fixed_feature_list = ['CityId', 'X', 'Y', 'Day', 'Month', 'Hour', 'Weekday', 'Weekofyear']
-        self.dynamic_feature_list = ['PM25', 'PM10', 'O3', 'CO', 'NO2', 'SO2']
         self.n_fixed_feature = len(self.fixed_feature_list)
+        self.dynamic_feature_list = ['PM25', 'PM10', 'O3', 'CO', 'NO2', 'SO2']
+        self.n_dynamic_feature = len(self.dynamic_feature_list)
+        self.emb_feature_list = ['StationId']
+        self.n_emb_feature = len(self.emb_feature_list)
         self.st_list = []
         self.st_list.append(bj_stations)
         self.st_list.append(ld_stations)
-        self.cal_pos_info()
-        self.make_aq_data()
+        self.n_aq_st = len(bj_stations) + len(ld_stations)
+        self.n_aq_bj = len(bj_stations)
+        self.cal_aqst_pos()
+        self.make_aq_features()
+        #self.make_grid_features()
 
         #todo: need to add other data preprocessing, e.g. 9997, a number which is too big
         self.time_len = self.dynamic_features.shape[1] - DECODE_STEPS
         self.n_dynamic_feature = self.dynamic_features.shape[-1]
         self.n_dec_feature = 6
         self.encode_len = pars['encode_len']
-        self.decode_len = 48
+        self.decode_len = DECODE_STEPS
         self.val_to_end = pars['val_to_end']
         self.batch_size = pars['batch_size']
         self.build_idxes()
@@ -354,7 +365,7 @@ class DataBuilder(object):
         self.test_bb = batch_gen(self.test_idxes, self.build_batch, bb_pars={}, batch_size=self.batch_size,
                                 shuffle=False, forever=False, drop_last=False)
 
-    def cal_pos_info(self):
+    def cal_aqst_pos(self):
         self.pos_list = []
         st_ll = []
         st_ll.append(pd.read_csv('../input/Beijing_AirQuality_Stations_cn.csv'))
@@ -369,7 +380,7 @@ class DataBuilder(object):
                 #print(st, pos)
                 self.pos_list[city].append(pos)
 
-    def add_time_features(self, st_data):
+    def add_time_features_aq(self, st_data):
         extra = pd.DataFrame()
         ts_list = []
         ts_idx = st_data.UtcTime.iloc[-1]
@@ -394,20 +405,23 @@ class DataBuilder(object):
         st_data['Weekofyear'] = st_data.UtcTime.dt.weekofyear
         return st_data
 
-
-    def make_aq_data(self):
+    def make_aq_features(self):
         dynamic_features = []
         fixed_features = []
+        emb_features = []
+        pos_features = []
         for city in (0, 1):
             data_dict = self.raw_data[city][0]
             for k, st in enumerate(data_dict):
-                data_dict[st] = self.add_time_features(data_dict[st])
+                data_dict[st] = self.add_time_features_aq(data_dict[st])
                 #print(st)
                 data_dict[st]['CityId'] = city
                 data_dict[st]['X'] = self.pos_list[city][k][0]
                 data_dict[st]['Y'] = self.pos_list[city][k][1]
-                dynamic_features.append(data_dict[st][self.dynamic_feature_list])
-                fixed_features.append(data_dict[st][self.fixed_feature_list])
+                dynamic_features.append(data_dict[st][self.dynamic_feature_list].values)
+                fixed_features.append(data_dict[st][self.fixed_feature_list].values)
+                emb_features.append(data_dict[st][self.emb_feature_list].values)
+
         self.dynamic_features = np.stack(dynamic_features)
         self.dynamic_features_mask = np.isnan(self.dynamic_features).astype(int)
         self.dynamic_features = np.asarray(self.dynamic_features, dtype=np.float32)
@@ -415,6 +429,9 @@ class DataBuilder(object):
 
         self.fixed_features = np.stack(fixed_features)
         self.fixed_features = np.asarray(self.fixed_features, dtype=np.float32)
+
+        self.emb_features = np.stack(emb_features)
+        self.emb_features = np.asarray(self.emb_features, dtype=np.float32)
 
     def check_valid_idx(self, s_idx, t_idx):
         nan_sum = self.dynamic_features[s_idx, t_idx:t_idx + self.decode_len, :self.n_dec_feature].sum()
@@ -425,55 +442,83 @@ class DataBuilder(object):
 
     def build_idxes(self):
         self.idxes = []
-        for s_idx in range(self.dynamic_features.shape[0]):
+        for s_idx in range(self.n_aq_st):
             for t_idx in range(self.encode_len, self.time_len-self.decode_len):
                 self.idxes.append((s_idx, t_idx))
 
         self.train_idxes = []
-        for s_idx in range(self.dynamic_features.shape[0]):
+        for s_idx in range(self.n_aq_st):
             for t_idx in range(self.encode_len, self.time_len-self.decode_len-self.val_to_end):
                 if self.check_valid_idx(s_idx, t_idx):
                     self.train_idxes.append((s_idx, t_idx))
 
         self.val_idxes = []
-        for s_idx in range(self.dynamic_features.shape[0]):
+        for s_idx in range(self.n_aq_st):
             for t_idx in range(self.time_len-self.val_to_end-self.decode_len, self.time_len-self.decode_len):
                 if self.check_valid_idx(s_idx, t_idx):
                     self.val_idxes.append((s_idx, t_idx))
 
         self.test_idxes = []
-        for s_idx in range(48):
+        for s_idx in range(DECODE_STEPS):
             self.test_idxes.append((s_idx, self.time_len))
 
-        pass
 
     def build_batch(self, idxes, pars={}):
         with_targets = False
         if 'with_targets' in pars:
             with_targets = pars['with_targets']
 
+        self.pos_back_len = 4
+
         batch_size = len(idxes)
+        st_idxes = np.zeros(batch_size)
+        enc_dynamic_all = np.zeros([batch_size, self.pos_back_len, self.n_dynamic_feature, self.n_aq_bj], dtype=np.float32)
+        enc_dynamic_nan_all = np.zeros_like(enc_dynamic_all)
+        enc_fixed_all = np.zeros([batch_size, self.pos_back_len, self.n_fixed_feature, self.n_aq_bj], dtype=np.float32)
+        enc_emb_all = np.zeros([batch_size, self.pos_back_len, self.n_emb_feature, self.n_aq_bj], dtype=np.float32)
+
         enc_dynamic = np.zeros([batch_size, self.encode_len, self.n_dynamic_feature], dtype=np.float32)
         enc_dynamic_nan = np.zeros_like(enc_dynamic)
         enc_fixed = np.zeros([batch_size, self.encode_len, self.n_fixed_feature], dtype=np.float32)
-        y_decode = np.zeros([batch_size, self.decode_len, self.n_dec_feature], dtype=np.float32)
-        is_nan_decode = np.zeros_like(y_decode)
+        enc_emb = np.zeros([batch_size, self.encode_len, self.n_emb_feature], dtype=np.float32)
+
+        dec_targets = np.zeros([batch_size, self.decode_len, self.n_dec_feature], dtype=np.float32)
+        dec_targets_nan = np.zeros_like(dec_targets)
         dec_fixed = np.zeros([batch_size, self.decode_len, self.n_fixed_feature], dtype=np.float32)
         encode_len = np.zeros([batch_size], dtype=np.int32)
         decode_len = np.zeros([batch_size], dtype=np.int32)
 
         #print('SeqLen = {}'.format(self.past_len))
-        for k, sti in enumerate(idxes):
-            s_idx = sti[0]
-            t_idx = sti[1]
-            enc_dynamic[k, :self.encode_len, :] = self.dynamic_features[s_idx, t_idx - self.encode_len:t_idx, :]
-            enc_dynamic_nan[k, :self.encode_len, :] = self.dynamic_features_mask[s_idx, t_idx - self.encode_len:t_idx, :]
-            enc_fixed[k, :self.encode_len, :] = self.fixed_features[s_idx, t_idx - self.encode_len:t_idx, :]
+        for k, sti_tuple in enumerate(idxes):
+            s_idx = sti_tuple[0]
+            t_idx = sti_tuple[1]
+            #city = 0
+            #if s_idx > 34:
+            #    city = 1
+            if s_idx <= 35: #bj stations
+                n_st = 35
+                base = 0
+            else:
+                n_st = 24
+                base = 35
+
             encode_len[k] = self.encode_len
+            st_idxes[k] = s_idx
+            #features_all
+            for sti in range(n_st):
+                enc_dynamic_all[k, :, :, sti-base] = self.dynamic_features[sti, t_idx-self.pos_back_len:t_idx, :]
+                enc_dynamic_nan_all[k, :self.pos_back_len, :, sti-base] = self.dynamic_features_mask[sti, t_idx - self.pos_back_len:t_idx, :]
+                enc_fixed_all[k, :self.pos_back_len, :, sti-base] = self.fixed_features[sti, t_idx - self.pos_back_len:t_idx, :]
+                enc_emb_all[k, :self.pos_back_len, :, sti-base] = self.emb_features[sti, t_idx-self.pos_back_len:t_idx, :]
+
+            enc_dynamic[k] = self.dynamic_features[s_idx, t_idx-self.encode_len:t_idx, :]
+            enc_dynamic_nan[k] = self.dynamic_features_mask[s_idx, t_idx - self.encode_len:t_idx, :]
+            enc_fixed[k] = self.fixed_features[s_idx, t_idx - self.encode_len:t_idx, :]
+            enc_emb[k] = self.emb_features[s_idx, t_idx-self.encode_len:t_idx, :]
 
             if with_targets:
-                y_decode[k, :, :] = self.dynamic_features[s_idx, t_idx:t_idx + self.decode_len, :self.n_dec_feature]
-                is_nan_decode[k, :, :] = self.dynamic_features_mask[s_idx, t_idx:t_idx + self.decode_len, :self.n_dec_feature]
+                dec_targets[k, :, :] = self.dynamic_features[s_idx, t_idx:t_idx + self.decode_len, :self.n_dec_feature]
+                dec_targets_nan[k, :, :] = self.dynamic_features_mask[s_idx, t_idx:t_idx + self.decode_len, :self.n_dec_feature]
                 dec_fixed[k, :, :] = self.fixed_features[s_idx, t_idx:t_idx + self.decode_len, :]
 
         #remove the tail of the dynamic features
@@ -481,18 +526,30 @@ class DataBuilder(object):
         rtp = True if random.random() < remove_tail_prob else False
         if rtp:
             last = random.choice([1, 2])
+            enc_dynamic_all[:, -last, :] = np.nan
+            enc_dynamic_nan_all[:, -last, :] = 1.0
+            enc_dynamic_all = np.nan_to_num(enc_dynamic_all)
             enc_dynamic[:, -last, :] = np.nan
             enc_dynamic_nan[:, -last, :] = 1.0
             enc_dynamic = np.nan_to_num(enc_dynamic)
 
         batch = {}
-        batch['enc_fixed'] = np.asarray(enc_fixed, dtype=np.float32)
-        batch['enc_dynamic'] = np.asarray(enc_dynamic, dtype=np.float32)
+        batch['st_idxes'] = np.asarray(st_idxes, dtype=np.long)
         batch['encode_len'] = encode_len
         batch['decode_len'] = decode_len
+
+        batch['enc_fixed_all'] = np.asarray(enc_fixed_all, dtype=np.float32)
+        batch['enc_dynamic_all'] = np.asarray(enc_dynamic_all, dtype=np.float32)
+        batch['enc_emb_all'] = np.asarray(enc_emb_all, dtype=np.float32)
+        batch['enc_dynamic_nan_all'] = np.asarray(enc_dynamic_nan_all, dtype=np.float32)
+
+        batch['enc_fixed'] = np.asarray(enc_fixed, dtype=np.float32)
+        batch['enc_dynamic'] = np.asarray(enc_dynamic, dtype=np.float32)
         batch['enc_dynamic_nan'] = np.asarray(enc_dynamic_nan, dtype=np.float32)
-        batch['y_decode'] = np.asarray(y_decode, dtype=np.float32)
-        batch['is_nan_decode'] = np.asarray(is_nan_decode, dtype=np.float32)
+        batch['enc_emb'] = np.asarray(enc_emb, dtype=np.float32)
+
+        batch['dec_targets'] = np.asarray(dec_targets, dtype=np.float32)
+        batch['dec_targets_nan'] = np.asarray(dec_targets_nan, dtype=np.float32)
         batch['dec_fixed'] = np.asarray(dec_fixed, dtype=np.float32)
         return batch
 
