@@ -20,9 +20,9 @@ class EncoderRNN(nn.Module):
         self.n_layers = n_layers
         self.dropout = dropout
         self.bidirectional = bidirectional
-        #self.conv1 = ResBac(self.input_size, self.hidden_size, kernel_size=3, stride=1, using_bn=False, padding=1, res=False)
         self.emb_aqst_enc = nn.Embedding(len(aq_stations), 3)
         self.emb_weather_enc = nn.Embedding(len(whether_list), 2)
+        #self.conv1 = ResBac(self.input_size, self.hidden_size, kernel_size=3, stride=1, using_bn=False, padding=1, res=False)
         self.rnn1 = nn.GRU(input_size, hidden_size, n_layers, dropout=self.dropout, bidirectional=self.bidirectional, batch_first=True)
 
     def forward(self, batch, hidden=None):
@@ -45,7 +45,7 @@ class EncoderRNN(nn.Module):
             outputs, hidden = self.rnn1(input_seqs, hidden)
             if self.bidirectional:
                 outputs = outputs[:, :, :self.hidden_size] + outputs[:, :, self.hidden_size:] # Sum bidirectional outputs
-            return outputs, hidden, enc_dynamic_mean
+            return outputs, hidden, enc_dynamic_mean, self.emb_aqst_enc
 
 
 class EncoderRNN2(nn.Module):
@@ -204,43 +204,73 @@ class TimeAttn(nn.Module):
 
 
 class SpaceAttn(TimeAttn):
-    def __init__(self, method, hidden_size):
+    def __init__(self, method, input_size, hidden_size):
         super().__init__(method, hidden_size)
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        if self.method == 'general':
+            self.attn = nn.Linear(self.input_size, hidden_size)
 
-    def forward(self, hidden, encoder_outputs):
-        seq_len = encoder_outputs.size(1)
-        batch_size = encoder_outputs.size(0)
-#         print('[attn] seq len', seq_len)
-#         print('[attn] encoder_outputs', encoder_outputs.size()) # S x B x N
-#         print('[attn] hidden', hidden.size()) # S=1 x B x N
+    def forward(self, hidden, batch, emb_aqst_enc):
+        with torch.set_grad_enabled(True):
+            enc_dynamic_all = torch.from_numpy(batch['enc_dynamic_all']).to(device)
+            enc_dynamic_all.requires_grad_()
+            enc_dynamic_nan_all = torch.from_numpy(batch['enc_dynamic_nan_all']).to(device)
+            enc_dynamic_nan_all.requires_grad_()
+            enc_fixed_all = torch.from_numpy(batch['enc_fixed_all']).to(device)
+            enc_fixed_all.requires_grad_()
+            enc_emb_all = torch.from_numpy(batch['enc_emb_all']).to(device)
+            enc_emb_all.requires_grad_()
+            seq_len = enc_fixed_all.shape[1]
+            batch_size = enc_fixed_all.shape[0]
 
-        # Create variable to store attention energies
-        attn_energies = torch.zeros(batch_size, seq_len, ).to(device) # B x S
+            enc_emb_all = enc_emb_all.squeeze(2)
+            emb_aqst = emb_aqst_enc(enc_emb_all.long())
+            emb_aqst = emb_aqst.permute(0, 1, 3, 2)
+            enc_dynamic_trans_all, enc_dynamic_mean_all = transform(enc_dynamic_all)
+            enc_dynamic_mean_all = enc_dynamic_mean_all.repeat(1, seq_len, 1, 1)
+            enc_batch = torch.cat([enc_fixed_all, enc_dynamic_trans_all, enc_dynamic_nan_all, enc_dynamic_mean_all, emb_aqst], dim=2)
+            feature_size = enc_batch.shape[2]
 
-        # For each batch of encoder outputs
-        #for k in range(seq_len-1, 0, -24):
-        #for k in range(seq_len-1, seq_len-7*24, -3):
-        #for k in range(seq_len-7*24, seq_len):
-            #attn_energies[:, k] = self.cal_energy_batch(hidden[:, 0], encoder_outputs[:, k])
-        #    attn_energies[:, k] = self.cal_energy_batch(hidden, encoder_outputs[:, k])
 
-        #for k in range(seq_len-24, seq_len):
-        #    attn_energies[:, k] = self.cal_energy_batch(hidden[:, 0], encoder_outputs[:, k])
+            # Create variable to store attention energies
+            attn_scores = torch.zeros(batch_size, seq_len*35).to(device) # B x S
+            attn_energies = torch.zeros(batch_size, seq_len*35, self.hidden_size).to(device) # B x S
 
-        #for k in range(seq_len-240, seq_len):
-        for k in range(seq_len):
-            attn_energies[:, k] = self.cal_energy_batch(hidden, encoder_outputs[:, k])
+            for k in range(seq_len):
+                for st_idx in range(35):
+                    attn_scores[:, k*35+st_idx], attn_energies[:, k*35+st_idx, :] = self.cal_energy_batch(hidden, enc_batch[:, k, :, st_idx])
 
-        # Normalize energies to weights in range 0 to 1, resize to 1 x B x S
-        attn_score = F.softmax(attn_energies, dim=1)
-        #attn_score = F.softmax(attn_energies).unsqueeze(1)
-        return attn_score
+            # Normalize energies to weights in range 0 to 1, resize to 1 x B x S
+            attn_weights = F.softmax(attn_scores, dim=1).unsqueeze(1)
 
+            #enc_batch = enc_batch.permute(0, 1, 3, 2)
+            #enc_batch = enc_batch.contiguous()
+            #enc_batch = enc_batch.view(batch_size, -1, feature_size)
+
+            space_context = attn_weights.bmm(attn_energies)
+            return space_context
+
+    def cal_energy_batch(self, hidden, encoder_output):
+        if self.method == 'dot':
+            energy = hidden.dot(encoder_output)
+            return energy
+
+        elif self.method == 'general':
+            energy0 = self.attn(encoder_output)
+            #energy = torch.bmm(energy.unsqueeze(1), hidden.permute(1, 2, 0))[:, 0, 0]
+            energy = torch.bmm(energy0.unsqueeze(1), hidden.permute(1, 2, 0))#[:, 0, 0]
+            return energy.sum(dim=2).sum(dim=1), energy0
+
+        elif self.method == 'concat':
+            energy = self.attn(torch.cat((hidden, encoder_output), 1))
+            energy = self.v.dot(energy)
+            return energy
 
 
 
 class BahdanauAttnDecoderRNN(nn.Module):
-    def __init__(self, attn_model, input_size, hidden_size, output_size, n_layers=1, dropout_p=0., bidirectional=False):
+    def __init__(self, attn_model, input_size, hidden_size, output_size, n_layers=1, dropout_p=0., bidirectional=False, n_enc_input=29):
         super().__init__()
 
         # Keep parameters for reference
@@ -254,18 +284,20 @@ class BahdanauAttnDecoderRNN(nn.Module):
         self.num_direction = 1
         if self.bidirectional == True:
             self.num_direction = 2
+        self.n_enc_input = n_enc_input
 
         # Define layers
-        self.rnn1 = nn.GRU(self.input_size+self.hidden_size, hidden_size, n_layers, dropout=dropout_p, bidirectional=self.bidirectional, batch_first=True)
-        self.rnn2 = nn.GRU(hidden_size*2, hidden_size, n_layers, dropout=dropout_p, bidirectional=self.bidirectional, batch_first=True)
+        self.rnn1 = nn.GRU(self.input_size+self.hidden_size*2, hidden_size, n_layers, dropout=dropout_p, bidirectional=self.bidirectional, batch_first=True)
+        self.rnn2 = nn.GRU(hidden_size*3, hidden_size, n_layers, dropout=dropout_p, bidirectional=self.bidirectional, batch_first=True)
         self.out = nn.Linear(hidden_size * 2, output_size)
         self.fc = nn.Linear(self.hidden_size * self.num_direction, self.output_size)
 
         # Choose attention model
         if attn_model != 'none':
             self.time_attn = TimeAttn(attn_model, hidden_size)
+            self.space_attn = SpaceAttn(attn_model, n_enc_input, hidden_size)
 
-    def forward(self, decoder_input, last_hidden, encoder_outputs, batch):
+    def forward(self, decoder_input, last_hidden, encoder_outputs, batch, emb_aqst_enc):
         # Note: we run this one step at a time
         with torch.set_grad_enabled(True):
             enc_dynamic_all = torch.from_numpy(batch['enc_dynamic_all']).to(device)
@@ -286,15 +318,16 @@ class BahdanauAttnDecoderRNN(nn.Module):
 
             enc_dynamic_trans_all, enc_dynamic_mean_all = transform(enc_dynamic_all)
             # Calculate space attention weights
+            space_context = self.space_attn(last_hidden, batch, emb_aqst_enc)
 
             # Calculate time attention weights and apply to encoder outputs
-            attn_weights = self.time_attn(last_hidden, encoder_outputs)
-            attn_weights = attn_weights.unsqueeze(1)
-            context = attn_weights.bmm(encoder_outputs) # B x 1 x F
+            time_attn_weights = self.time_attn(last_hidden, encoder_outputs)
+            time_attn_weights = time_attn_weights.unsqueeze(1)
+            time_context = time_attn_weights.bmm(encoder_outputs) # B x 1 x F
 
             # Combine embedded input word and attended context, run through RNN
-            input_seq = torch.cat((decoder_input, context), 2)
-            if input_seq.shape[-1] != self.hidden_size*2:
+            input_seq = torch.cat((decoder_input, time_context, space_context), 2)
+            if input_seq.shape[-1] != self.hidden_size*3:
                 input_seq, hidden = self.rnn1(input_seq, last_hidden)
                 if self.bidirectional:
                     input_seq = input_seq[:, :, :self.hidden_size] + input_seq[:, :, self.hidden_size:] # Sum bidirectional outputs
@@ -306,7 +339,7 @@ class BahdanauAttnDecoderRNN(nn.Module):
             output = self.fc(rnn_output)
 
             # Return final output, hidden state, and attention weights (for visualization)
-            return output, hidden, context, attn_weights
+            return output, hidden, time_context, time_attn_weights
 
 
 class LuongAttnDecoderRNN(nn.Module):

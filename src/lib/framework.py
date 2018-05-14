@@ -121,7 +121,7 @@ class EncDec(object):
         elif type == 1:
             self.decoder = BahdanauAttnDecoderRNN(attn_model='general', input_size=self.n_dec_input,
                                                   hidden_size=self.n_hidden, output_size=self.n_out,
-                                                  n_layers=self.n_dec_layers, dropout_p=self.dropo)
+                                                  n_layers=self.n_dec_layers, dropout_p=self.dropo, n_enc_input=self.n_enc_input)
         elif type == 2:
             self.decoder = LuongAttnDecoderRNN(attn_model='general', input_size=self.n_dec_input,
                                                hidden_size=self.n_hidden, output_size=self.n_out,
@@ -436,15 +436,6 @@ class Seq2Seq(EncDec):
             target_len = batch['dec_targets'].shape[1]
             batch_size = batch['enc_fixed'].shape[0]
 
-            enc_dynamic_all = Variable(torch.from_numpy(batch['enc_dynamic_all'])).to(device)
-            enc_dynamic_all.requires_grad_()
-            enc_dynamic_nan_all = Variable(torch.from_numpy(batch['enc_dynamic_nan_all'])).to(device)
-            enc_dynamic_nan_all.requires_grad_()
-            enc_fixed_all = Variable(torch.from_numpy(batch['enc_fixed_all'])).to(device)
-            enc_fixed_all.requires_grad_()
-            enc_emb_all = Variable(torch.from_numpy(batch['enc_emb_all'])).to(device)
-            enc_emb_all.requires_grad_()
-
             dec_targets = Variable(torch.from_numpy(batch['dec_targets'])).to(device)
             dec_targets.requires_grad_()
             dec_targets_nan = Variable(torch.from_numpy(batch['dec_targets_nan'])).to(device)
@@ -452,9 +443,7 @@ class Seq2Seq(EncDec):
             dec_fixed = torch.from_numpy(batch['dec_fixed']).to(device)
             dec_fixed.requires_grad_()
 
-            enc_dynamic_trans_all, enc_dynamic_mean_all = self.transform(enc_dynamic_all)
-
-            encoder_outputs, encoder_hidden, enc_dynamic_mean = self.encoder(batch, None)
+            encoder_outputs, encoder_hidden, enc_dynamic_mean, emb_aqst_enc = self.encoder(batch, None)
 
             # Prepare input and output variables
             decoder_input = encoder_outputs[:, -1:, :]
@@ -468,7 +457,7 @@ class Seq2Seq(EncDec):
             use_teacher_forcing = True if random.random() < self.teacher_forcing_ratio else False
             for t in range(target_len):
                 #decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
-                decoder_output, decoder_hidden, context, attn_weights = self.decoder(decoder_input, decoder_hidden, encoder_outputs, batch)
+                decoder_output, decoder_hidden, context, attn_weights = self.decoder(decoder_input, decoder_hidden, encoder_outputs, batch, emb_aqst_enc)
 
                 #print(predictions[t].size(), decoder_output[0].size())
                 predictions[:, t, :] = decoder_output[:, 0, :]
@@ -513,7 +502,7 @@ class Seq2Seq(EncDec):
             enc_dynamic_mean = enc_dynamic_mean.repeat(1, time_len, 1)
             data_batch = torch.cat([enc_fixed, enc_dynamic_trans, enc_dynamic_nan, enc_dynamic_mean], dim=2)
 
-            encoder_outputs, encoder_hidden, enc_dynamic_mean = self.encoder(batch, None)
+            encoder_outputs, encoder_hidden, enc_dynamic_mean, emb_aqst_enc = self.encoder(batch, None)
 
             # Prepare input and output variables
             decoder_input = encoder_outputs[:, -1:, :]
@@ -528,7 +517,7 @@ class Seq2Seq(EncDec):
 
             for t in range(target_len):
                 #decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
-                decoder_output, decoder_hidden, context, attn_weights = self.decoder(decoder_input, decoder_hidden, encoder_outputs, batch)
+                decoder_output, decoder_hidden, context, attn_weights = self.decoder(decoder_input, decoder_hidden, encoder_outputs, batch, emb_aqst_enc)
 
                 #print(all_decoder_outputs[t].size(), decoder_output[0].size())
                 predictions[:, t, :] = decoder_output[:, 0, :]
