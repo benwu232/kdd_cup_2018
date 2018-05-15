@@ -243,7 +243,7 @@ class EncDec(object):
         #summary = torch_summarize_df((self.model.n_features, self.model.past_len), self.model)
         #self.logger.info(summary)
         #self.logger.info('total trainable parameters: {}'.format(summary['nb_params'].sum()))
-        clf_dir = '../clf_attn/'
+        clf_dir = '../clf_attn2/'
 
         max_score = 1.0
         sb_len = 11
@@ -405,6 +405,7 @@ class Seq2Seq(EncDec):
         if 'file_prefix' in model_pars:
             prefix = model_pars['file_prefix']
             self.load_model(prefix)
+        self.logger.info(model_pars)
 
     def load_model(self, prefix, model_dir='../clf/'):
         enc_file = model_dir + prefix + '_enc.pth'
