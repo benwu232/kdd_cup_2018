@@ -33,19 +33,22 @@ class EncoderRNN(nn.Module):
             enc_dynamic_nan.requires_grad_()
             enc_fixed = torch.from_numpy(batch['enc_fixed']).to(device)
             enc_fixed.requires_grad_()
-            enc_emb = torch.from_numpy(batch['enc_emb'][:, :, 0]).to(device)
-            enc_emb.requires_grad_()
+            emb_station_id = torch.from_numpy(batch['enc_emb'][:, :, 0]).to(device)
+            emb_station_id.requires_grad_()
+            emb_weather = torch.from_numpy(batch['enc_emb'][:, :, 1]).to(device)
+            emb_weather.requires_grad_()
 
             enc_dynamic_trans, enc_dynamic_mean = transform(enc_dynamic)
             time_len = enc_dynamic_trans.shape[1]
             enc_dynamic_mean = enc_dynamic_mean.repeat(1, time_len, 1)
 
-            emb_aqst = self.emb_aqst_enc(enc_emb.long())
-            input_seqs = torch.cat([enc_fixed, enc_dynamic_trans, enc_dynamic_nan, enc_dynamic_mean, emb_aqst], dim=2)
+            emb_aqst = self.emb_aqst_enc(emb_station_id.long())
+            emb_weather = self.emb_weather_enc(emb_weather.long())
+            input_seqs = torch.cat([enc_fixed, enc_dynamic_trans, enc_dynamic_nan, enc_dynamic_mean, emb_aqst, emb_weather], dim=2)
             outputs, hidden = self.rnn1(input_seqs, hidden)
             if self.bidirectional:
                 outputs = outputs[:, :, :self.hidden_size] + outputs[:, :, self.hidden_size:] # Sum bidirectional outputs
-            return outputs, hidden, enc_dynamic_mean, self.emb_aqst_enc
+            return outputs, hidden, enc_dynamic_mean, self.emb_aqst_enc, self.emb_weather_enc
 
 
 class EncoderRNN2(nn.Module):
@@ -211,7 +214,7 @@ class SpaceAttn(TimeAttn):
         if self.method == 'general':
             self.attn = nn.Linear(self.input_size, hidden_size)
 
-    def forward(self, hidden, batch, emb_aqst_enc):
+    def forward(self, hidden, batch, emb_aqst_enc, emb_weather_enc):
         with torch.set_grad_enabled(True):
             enc_dynamic_all = torch.from_numpy(batch['enc_dynamic_all']).to(device)
             enc_dynamic_all.requires_grad_()
@@ -225,11 +228,13 @@ class SpaceAttn(TimeAttn):
             batch_size = enc_fixed_all.shape[0]
 
             enc_emb_all = enc_emb_all.squeeze(2)
-            emb_aqst = emb_aqst_enc(enc_emb_all.long())
+            emb_aqst = emb_aqst_enc(enc_emb_all[:, :, 0, :].long())
             emb_aqst = emb_aqst.permute(0, 1, 3, 2)
+            emb_weather = emb_weather_enc(enc_emb_all[:, :, 1, :].long())
+            emb_weather = emb_weather.permute(0, 1, 3, 2)
             enc_dynamic_trans_all, enc_dynamic_mean_all = transform(enc_dynamic_all)
             enc_dynamic_mean_all = enc_dynamic_mean_all.repeat(1, seq_len, 1, 1)
-            enc_batch = torch.cat([enc_fixed_all, enc_dynamic_trans_all, enc_dynamic_nan_all, enc_dynamic_mean_all, emb_aqst], dim=2)
+            enc_batch = torch.cat([enc_fixed_all, enc_dynamic_trans_all, enc_dynamic_nan_all, enc_dynamic_mean_all, emb_aqst, emb_weather], dim=2)
             feature_size = enc_batch.shape[2]
 
 
@@ -297,7 +302,7 @@ class BahdanauAttnDecoderRNN(nn.Module):
             self.time_attn = TimeAttn(attn_model, hidden_size)
             self.space_attn = SpaceAttn(attn_model, n_enc_input, hidden_size)
 
-    def forward(self, decoder_input, last_hidden, encoder_outputs, batch, emb_aqst_enc):
+    def forward(self, decoder_input, last_hidden, encoder_outputs, batch, emb_aqst_enc, emb_weather_enc):
         # Note: we run this one step at a time
         with torch.set_grad_enabled(True):
             enc_dynamic_all = torch.from_numpy(batch['enc_dynamic_all']).to(device)
@@ -316,9 +321,8 @@ class BahdanauAttnDecoderRNN(nn.Module):
             dec_fixed = torch.from_numpy(batch['dec_fixed']).to(device)
             dec_fixed.requires_grad_()
 
-            enc_dynamic_trans_all, enc_dynamic_mean_all = transform(enc_dynamic_all)
             # Calculate space attention weights
-            space_context = self.space_attn(last_hidden, batch, emb_aqst_enc)
+            space_context = self.space_attn(last_hidden, batch, emb_aqst_enc, emb_weather_enc)
 
             # Calculate time attention weights and apply to encoder outputs
             time_attn_weights = self.time_attn(last_hidden, encoder_outputs)

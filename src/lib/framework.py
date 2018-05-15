@@ -443,7 +443,7 @@ class Seq2Seq(EncDec):
             dec_fixed = torch.from_numpy(batch['dec_fixed']).to(device)
             dec_fixed.requires_grad_()
 
-            encoder_outputs, encoder_hidden, enc_dynamic_mean, emb_aqst_enc = self.encoder(batch, None)
+            encoder_outputs, encoder_hidden, enc_dynamic_mean, emb_aqst_enc, emb_weather_enc = self.encoder(batch, None)
 
             # Prepare input and output variables
             decoder_input = encoder_outputs[:, -1:, :]
@@ -457,7 +457,7 @@ class Seq2Seq(EncDec):
             use_teacher_forcing = True if random.random() < self.teacher_forcing_ratio else False
             for t in range(target_len):
                 #decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
-                decoder_output, decoder_hidden, context, attn_weights = self.decoder(decoder_input, decoder_hidden, encoder_outputs, batch, emb_aqst_enc)
+                decoder_output, decoder_hidden, context, attn_weights = self.decoder(decoder_input, decoder_hidden, encoder_outputs, batch, emb_aqst_enc, emb_weather_enc)
 
                 #print(predictions[t].size(), decoder_output[0].size())
                 predictions[:, t, :] = decoder_output[:, 0, :]
@@ -502,7 +502,7 @@ class Seq2Seq(EncDec):
             enc_dynamic_mean = enc_dynamic_mean.repeat(1, time_len, 1)
             data_batch = torch.cat([enc_fixed, enc_dynamic_trans, enc_dynamic_nan, enc_dynamic_mean], dim=2)
 
-            encoder_outputs, encoder_hidden, enc_dynamic_mean, emb_aqst_enc = self.encoder(batch, None)
+            encoder_outputs, encoder_hidden, enc_dynamic_mean, emb_aqst_enc, emb_weather_enc = self.encoder(batch, None)
 
             # Prepare input and output variables
             decoder_input = encoder_outputs[:, -1:, :]
@@ -517,7 +517,7 @@ class Seq2Seq(EncDec):
 
             for t in range(target_len):
                 #decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
-                decoder_output, decoder_hidden, context, attn_weights = self.decoder(decoder_input, decoder_hidden, encoder_outputs, batch, emb_aqst_enc)
+                decoder_output, decoder_hidden, context, attn_weights = self.decoder(decoder_input, decoder_hidden, encoder_outputs, batch, emb_aqst_enc, emb_weather_enc)
 
                 #print(all_decoder_outputs[t].size(), decoder_output[0].size())
                 predictions[:, t, :] = decoder_output[:, 0, :]

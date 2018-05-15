@@ -10,7 +10,7 @@ import sklearn
 from sklearn import preprocessing
 from collections import OrderedDict
 
-DBG = 0
+DBG = 1
 
 DECODE_STEPS = 48
 USE_CUDA = True
