@@ -58,7 +58,7 @@ for k, item in enumerate(scoreboard):
     prefix = item[-1]
     enc_file = prefix + '_enc.pth'
     dec_file = prefix + '_dec.pth'
-    out_file = '../submit/submit{}.csv'.format(str(k))
+    out_file = '../submit/submit{}.csv'.format(str(k+200))
     print(prefix, out_file)
     predict(enc_file, dec_file, out_file)
 
