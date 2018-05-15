@@ -26,7 +26,7 @@ if __name__ == '__main__':
         'lr': 0.001,
         'batch_size': batch_size,
         'n_dynamic_features': 6,
-        'n_fixed_features': 6,
+        'n_fixed_features': 8,
         'n_emb_features': 3,
         'n_hidden': 100,
         'n_enc_layers': 2,
@@ -34,7 +34,7 @@ if __name__ == '__main__':
         'dropout': 0.5,
         'log_interval': 10,
         'min_steps_to_checkpoint': 100,
-        'early_stopping_steps': 1000,
+        'early_stopping_steps': 600,
         'loss_type': 'SMAPE',
         'encoder': {
             'optimizer': {'type': 'Adam', 'beta1': 0.9, 'beta2': 0.999, 'epsilon': 1e-8, 'l2_scale': 1e-2, 'amsgrad': False},

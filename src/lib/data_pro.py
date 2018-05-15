@@ -334,8 +334,8 @@ class DataBuilder(object):
             for st in self.raw_data[city][0].keys():
                 self.raw_data[city][0][st].StationId = aq_le.transform(self.raw_data[city][0][st].StationId)
 
-        #self.fixed_feature_list = ['CityId', 'X', 'Y', 'Day', 'Month', 'Hour', 'Weekday', 'Weekofyear']
-        self.fixed_feature_list = ['CityId', 'Day', 'Month', 'Hour', 'Weekday', 'Weekofyear']
+        self.fixed_feature_list = ['CityId', 'X', 'Y', 'Day', 'Month', 'Hour', 'Weekday', 'Weekofyear']
+        #self.fixed_feature_list = ['CityId', 'Day', 'Month', 'Hour', 'Weekday', 'Weekofyear']
         self.n_fixed_feature = len(self.fixed_feature_list)
         self.dynamic_feature_list = ['PM25', 'PM10', 'O3', 'CO', 'NO2', 'SO2']
         self.n_dynamic_feature = len(self.dynamic_feature_list)
