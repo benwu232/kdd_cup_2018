@@ -62,4 +62,7 @@ for k, item in enumerate(scoreboard):
     print(prefix, out_file)
     predict(enc_file, dec_file, out_file)
 
-fusion(fusion_list, submission_csv='../submit/submission.csv')
+fusion(fusion_list, submission_csv='../submit_attn2/submission.csv')
+
+
+print(scoreboard)

@@ -705,7 +705,7 @@ class DataBuilder(object):
         if 'with_targets' in pars:
             with_targets = pars['with_targets']
 
-        self.pos_back_len = 4
+        self.pos_back_len = 2
 
         batch_size = len(idxes)
         st_idxes = np.zeros(batch_size)
