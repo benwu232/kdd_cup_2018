@@ -4,8 +4,9 @@ from lib.define import load_dump
 from predict import predict
 import glob
 
-fusion_list = glob.glob('../submit/submit*.csv')
-redundant = '../submit/submit.csv'
+submit_dir = '../submit_attn_pos'
+fusion_list = glob.glob('{}/submit*.csv'.format(submit_dir))
+redundant = '{}/submit.csv'.format(submit_dir)
 if redundant in fusion_list:
     fusion_list.remove(redundant)
 
@@ -14,7 +15,7 @@ def fusion(fusion_file_list, submission_csv):
     df_sum = pd.read_csv('../input/sample_submission.csv')
     df_sum = df_sum.sort_values('test_id')
     for k, file_name in enumerate(fusion_file_list):
-        fusion_file = os.path.join('../submit', file_name)
+        fusion_file = os.path.join(submit_dir, file_name)
         df_one = (pd.read_csv(fusion_file))
         print('Sorting ...', fusion_file)
         df_one = df_one.sort_values('test_id')
@@ -50,7 +51,7 @@ def fusion(fusion_file_list, submission_csv):
 
 
 
-scoreboard = load_dump('../clf_attn/scoreboard.pkl')
+scoreboard = load_dump('../clf_attn_pos/scoreboard.pkl')
 
 #predict multiple times
 for k, item in enumerate(scoreboard):
@@ -58,8 +59,8 @@ for k, item in enumerate(scoreboard):
     prefix = item[-1]
     enc_file = prefix + '_enc.pth'
     dec_file = prefix + '_dec.pth'
-    out_file = '../submit/submit{}.csv'.format(str(k))
+    out_file = '{}/submit{}.csv'.format(submit_dir, str(k+500))
     print(prefix, out_file)
     predict(enc_file, dec_file, out_file)
 
-fusion(fusion_list, submission_csv='../submit/submission.csv')
+fusion(fusion_list, submission_csv='{}/submission.csv'.format(submit_dir))

@@ -26,7 +26,7 @@ def preds_to_df(preds):
 
 def predict(enc_file, dec_file, out_file):
     pars = {
-        'with_tblog': True,
+        'with_tblog': False,
         'enc_file': enc_file,
         'dec_file': dec_file,
         'encode_len': 168,
@@ -70,7 +70,7 @@ def predict(enc_file, dec_file, out_file):
     print('converting to DataFrame ...')
     pdf = preds_to_df(preds)
     print('converting to CSV ...')
-    pdf.to_csv('../submit/{}'.format(out_file), encoding='utf-8', index=False)
+    pdf.to_csv(out_file, encoding='utf-8', index=False)
 
 
 

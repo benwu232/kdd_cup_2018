@@ -243,7 +243,7 @@ class EncDec(object):
         #summary = torch_summarize_df((self.model.n_features, self.model.past_len), self.model)
         #self.logger.info(summary)
         #self.logger.info('total trainable parameters: {}'.format(summary['nb_params'].sum()))
-        clf_dir = '../clf_attn/'
+        clf_dir = '../clf_attn_pos/'
 
         max_score = 1.0
         sb_len = 11
@@ -273,6 +273,7 @@ class EncDec(object):
         last_save_step = 0
         best_val_loss = 200.0
         best_val_loss_step = 0
+        last_change_step = 0
         best_score = 0.0
         best_score_step = 0
         best_val_accuracy = 0.4
@@ -329,32 +330,38 @@ class EncDec(object):
                 self.tblog_value('val_fn_loss', val_loss, step)
 
                 if step > self.min_steps_to_checkpoint:
-                    if avg_val_loss < best_val_loss - 0.0001:
-                        best_val_loss = avg_val_loss
-                        best_val_loss_step = step
-                        self.logger.info('$$$$$$$$$$$$$ Best loss {} at training step {} $$$$$$$$$'.format(best_val_loss, best_val_loss_step))
+                    #if avg_val_loss < best_val_loss - 0.0001:
+                    #    best_val_loss = avg_val_loss
+                    #    best_val_loss_step = step
+                    #    self.logger.info('$$$$$$$$$$$$$ Best loss {} at training step {} $$$$$$$$$'.format(best_val_loss, best_val_loss_step))
 
+                    #    model_prefix = clf_dir + prefix + self.timestamp + '_' + str(step)
+                    #    self.logger.info('save to {}'.format(model_prefix))
+                    #    self.save_model(model_prefix)
+
+                    if len(scoreboard) == 0 or val_loss < scoreboard[-1][0]:
+                        last_change_step = step
                         model_prefix = clf_dir + prefix + self.timestamp + '_' + str(step)
+                        self.logger.info('$$$$$$$$$$$$$ Good loss {} at training step {} $$$$$$$$$'.format(val_loss, step))
                         self.logger.info('save to {}'.format(model_prefix))
                         self.save_model(model_prefix)
 
-                        if len(scoreboard) == 0 or best_val_loss < scoreboard[-1][0]:
-                            scoreboard.append([val_loss, step, self.timestamp, kwargs, model_prefix])
-                            scoreboard.sort(key=lambda e: e[0], reverse=False)
+                        scoreboard.append([val_loss, step, self.timestamp, kwargs, model_prefix])
+                        scoreboard.sort(key=lambda e: e[0], reverse=False)
 
-                            #remove useless files
-                            if len(scoreboard) > sb_len:
-                                del_file = scoreboard[-1][-1]
-                                tmp_file_list = glob.glob(os.path.basename(del_file))
-                                for f in tmp_file_list:
-                                    if os.path.isfile(f):
-                                        os.remove(f)
+                        #remove useless files
+                        if len(scoreboard) > sb_len:
+                            del_file = scoreboard[-1][-1]
+                            tmp_file_list = glob.glob(os.path.basename(del_file))
+                            for f in tmp_file_list:
+                                if os.path.isfile(f):
+                                    os.remove(f)
 
-                            scoreboard = scoreboard[:sb_len]
-                            save_dump(scoreboard, scoreboard_file)
+                        scoreboard = scoreboard[:sb_len]
+                        save_dump(scoreboard, scoreboard_file)
 
                     #early stopping
-                    if self.early_stopping_steps >= 0 and step - best_val_loss_step > self.early_stopping_steps:
+                    if self.early_stopping_steps >= 0 and step - last_change_step > self.early_stopping_steps:
                         if 'hp_cnt' in kwargs:
                             self.logger.info('$$$$$$$$$$$$$ Hyper Search {} $$$$$$$$$$$$$$$$$$$$$$$'.format(kwargs['hp_cnt']))
                         self.logger.info('early stopping - ending training at {}.'.format(step))
@@ -536,9 +543,8 @@ class Seq2Seq(EncDec):
             enc_dynamic_nan = (torch.from_numpy(batch['enc_dynamic_nan'])).to(device)
             dec_fixed = torch.from_numpy(batch['dec_fixed']).to(device)
             enc_dynamic_trans, enc_dynamic_mean = self.transform(enc_dynamic)
-            data_batch = torch.cat([enc_fixed, enc_dynamic_trans, enc_dynamic_nan, enc_dynamic_mean], dim=2)
 
-            encoder_outputs, encoder_hidden = self.encoder(data_batch, None)
+            encoder_outputs, encoder_hidden, enc_dynamic_mean, emb_aqst_enc = self.encoder(batch, None)
 
             # Prepare input and output variables
             decoder_input = encoder_outputs[:, -1:, :]
@@ -549,15 +555,15 @@ class Seq2Seq(EncDec):
             predictions = predictions.to(device)
 
             for t in range(predict_seq_len):
-                #decoder_output, decoder_hidden, decoder_attn = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
-                decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
+                #decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
+                decoder_output, decoder_hidden, context, attn_weights = self.decoder(decoder_input, decoder_hidden, encoder_outputs, batch, emb_aqst_enc)
 
                 #print(all_decoder_outputs[t].size(), decoder_output[0].size())
                 predictions[:, t, :] = decoder_output[:, 0, :]
                 decoder_input = torch.cat([decoder_output, dec_fixed[:, -1, :].unsqueeze(1)], dim=2)      # Next input is current prediction
 
             # Loss calculation and backpropagation
-            predictions = self.inv_transform(predictions)
+            predictions = self.inv_transform(predictions, enc_dynamic_mean[:, :1, :])
             return predictions
 
     def predict(self, predict_bb, predict_seq_len):
