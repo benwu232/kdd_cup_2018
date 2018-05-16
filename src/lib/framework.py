@@ -330,10 +330,10 @@ class EncDec(object):
                 self.tblog_value('val_fn_loss', val_loss, step)
 
                 if step > self.min_steps_to_checkpoint:
-                    #if avg_val_loss < best_val_loss - 0.0001:
-                    #    best_val_loss = avg_val_loss
-                    #    best_val_loss_step = step
-                    #    self.logger.info('$$$$$$$$$$$$$ Best loss {} at training step {} $$$$$$$$$'.format(best_val_loss, best_val_loss_step))
+                    if avg_val_loss < best_val_loss - 0.0001:
+                        best_val_loss = avg_val_loss
+                        best_val_loss_step = step
+                        self.logger.info('$$$$$$$$$$$$$ Best loss {} at training step {} $$$$$$$$$'.format(best_val_loss, best_val_loss_step))
 
                     #    model_prefix = clf_dir + prefix + self.timestamp + '_' + str(step)
                     #    self.logger.info('save to {}'.format(model_prefix))

@@ -43,7 +43,7 @@ def hp_core(pars):
     print('****************** Hyper Search round %d start at %s ************************' % (hp_cnt, now2str()))
 
     hp_pars = {
-        'with_tblog': False,
+        'with_tblog': True,
         'enc_file': None,
         'dec_file': None,
         'encode_len': pars['encode_len'],
