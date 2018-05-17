@@ -248,7 +248,7 @@ class EncDec(object):
         clf_dir = '../clf_attn_pos/'
 
         max_score = 1.0
-        sb_len = 11
+        sb_len = 31
         kf = ''
         if 'kf' in kwargs:
             kf = 'kf{}_'.format(kwargs['kf'])
