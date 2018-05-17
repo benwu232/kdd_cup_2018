@@ -270,7 +270,7 @@ class SpaceAttn(TimeAttn):
 
 
 class BahdanauAttnDecoderRNN(nn.Module):
-    def __init__(self, attn_model, input_size, hidden_size, output_size, n_layers=1, dropout_p=0., bidirectional=False, n_enc_input=29):
+    def __init__(self, attn_model, input_size, hidden_size, output_size, n_layers=1, dropout_p=0., bidirectional=False, n_enc_input=29, with_space_attn=False):
         super().__init__()
 
         # Keep parameters for reference
@@ -285,17 +285,23 @@ class BahdanauAttnDecoderRNN(nn.Module):
         if self.bidirectional == True:
             self.num_direction = 2
         self.n_enc_input = n_enc_input
+        self.with_space_attn = with_space_attn
 
         # Define layers
-        self.rnn1 = nn.GRU(self.input_size+self.hidden_size*2, hidden_size, n_layers, dropout=dropout_p, bidirectional=self.bidirectional, batch_first=True)
-        self.rnn2 = nn.GRU(hidden_size*3, hidden_size, n_layers, dropout=dropout_p, bidirectional=self.bidirectional, batch_first=True)
+        if self.with_space_attn:
+            self.rnn1 = nn.GRU(self.input_size+self.hidden_size*2, hidden_size, n_layers, dropout=dropout_p, bidirectional=self.bidirectional, batch_first=True)
+            self.rnn2 = nn.GRU(hidden_size*3, hidden_size, n_layers, dropout=dropout_p, bidirectional=self.bidirectional, batch_first=True)
+        else:
+            self.rnn1 = nn.GRU(self.input_size+self.hidden_size, hidden_size, n_layers, dropout=dropout_p, bidirectional=self.bidirectional, batch_first=True)
+            self.rnn2 = nn.GRU(hidden_size*2, hidden_size, n_layers, dropout=dropout_p, bidirectional=self.bidirectional, batch_first=True)
         self.out = nn.Linear(hidden_size * 2, output_size)
         self.fc = nn.Linear(self.hidden_size * self.num_direction, self.output_size)
 
         # Choose attention model
         if attn_model != 'none':
             self.time_attn = TimeAttn(attn_model, hidden_size)
-            self.space_attn = SpaceAttn(attn_model, n_enc_input, hidden_size)
+            if self.with_space_attn:
+                self.space_attn = SpaceAttn(attn_model, n_enc_input, hidden_size)
 
     def forward(self, decoder_input, last_hidden, encoder_outputs, batch, emb_aqst_enc):
         # Note: we run this one step at a time
@@ -316,18 +322,21 @@ class BahdanauAttnDecoderRNN(nn.Module):
             dec_fixed = torch.from_numpy(batch['dec_fixed']).to(device)
             dec_fixed.requires_grad_()
 
-            enc_dynamic_trans_all, enc_dynamic_mean_all = transform(enc_dynamic_all)
-            # Calculate space attention weights
-            space_context = self.space_attn(last_hidden, batch, emb_aqst_enc)
-
             # Calculate time attention weights and apply to encoder outputs
             time_attn_weights = self.time_attn(last_hidden, encoder_outputs)
             time_attn_weights = time_attn_weights.unsqueeze(1)
             time_context = time_attn_weights.bmm(encoder_outputs) # B x 1 x F
 
-            # Combine embedded input word and attended context, run through RNN
-            input_seq = torch.cat((decoder_input, time_context, space_context), 2)
-            if input_seq.shape[-1] != self.hidden_size*3:
+            # Calculate space attention weights
+            if self.with_space_attn:
+                space_context = self.space_attn(last_hidden, batch, emb_aqst_enc)
+                input_seq = torch.cat((decoder_input, time_context, space_context), 2)
+                factor = 3
+            else:
+                input_seq = torch.cat((decoder_input, time_context), 2)
+                factor = 2
+
+            if input_seq.shape[-1] != self.hidden_size*factor:
                 input_seq, hidden = self.rnn1(input_seq, last_hidden)
                 if self.bidirectional:
                     input_seq = input_seq[:, :, :self.hidden_size] + input_seq[:, :, self.hidden_size:] # Sum bidirectional outputs

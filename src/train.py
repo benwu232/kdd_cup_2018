@@ -17,6 +17,7 @@ if __name__ == '__main__':
         'with_tblog': True,
         'enc_file': None,
         'dec_file': None,
+        'with_space_attn': False,
         'encode_len': 168,
         'val_to_end': 260,
         #'encode_len': 960,

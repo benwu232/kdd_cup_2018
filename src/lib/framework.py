@@ -45,6 +45,7 @@ class EncDec(object):
         self.n_dec_layers = model_pars['n_dec_layers']
         self.dec_type = model_pars['dec_type']
         self.dropo = model_pars['dropout']
+        self.with_space_attn = model_pars['with_space_attn']
         self.n_out = 6
         self.n_dec_input = self.n_out + self.n_fixed_features
 
@@ -121,7 +122,8 @@ class EncDec(object):
         elif type == 1:
             self.decoder = BahdanauAttnDecoderRNN(attn_model='general', input_size=self.n_dec_input,
                                                   hidden_size=self.n_hidden, output_size=self.n_out,
-                                                  n_layers=self.n_dec_layers, dropout_p=self.dropo, n_enc_input=self.n_enc_input)
+                                                  n_layers=self.n_dec_layers, dropout_p=self.dropo,
+                                                  n_enc_input=self.n_enc_input, with_space_attn=self.with_space_attn)
         elif type == 2:
             self.decoder = LuongAttnDecoderRNN(attn_model='general', input_size=self.n_dec_input,
                                                hidden_size=self.n_hidden, output_size=self.n_out,
