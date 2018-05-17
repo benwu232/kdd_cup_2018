@@ -32,8 +32,8 @@ if __name__ == '__main__':
         'n_enc_layers': 2,
         'n_dec_layers': 2,
         'dropout': 0.5,
-        'log_interval': 10,
-        'min_steps_to_checkpoint': 100,
+        'log_interval': 2,
+        'min_steps_to_checkpoint': 2,
         'early_stopping_steps': 600,
         'loss_type': 'SMAPE',
         'encoder': {

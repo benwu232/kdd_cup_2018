@@ -298,6 +298,7 @@ def integrate_data(data_file):
 
 def batch_gen(indices, build_batch, bb_pars={},
               batch_size=128, shuffle=False, forever=True, drop_last=True):
+    k = 0
     data_len = len(indices)
     #indices = np.arange(data_len)
 
@@ -363,7 +364,7 @@ class DataBuilder(object):
                                   shuffle=True, forever=True, drop_last=True)
         self.val_bb = batch_gen(self.val_idxes, self.build_batch, bb_pars={'with_targets': True}, batch_size=self.batch_size,
                                   shuffle=True, forever=True, drop_last=True)
-        self.test_bb = batch_gen(self.test_idxes, self.build_batch, bb_pars={}, batch_size=self.batch_size,
+        self.test_bb = batch_gen(self.test_idxes, self.build_batch, bb_pars={}, batch_size=32,
                                 shuffle=False, forever=False, drop_last=False)
 
     def cal_aqst_pos(self):
