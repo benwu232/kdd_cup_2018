@@ -32,9 +32,9 @@ if __name__ == '__main__':
         'n_enc_layers': 2,
         'n_dec_layers': 2,
         'dropout': 0.5,
-        'log_interval': 2,
-        'min_steps_to_checkpoint': 2,
-        'early_stopping_steps': 600,
+        'log_interval': 10,
+        'min_steps_to_checkpoint': 100,
+        'early_stopping_steps': 100,
         'loss_type': 'SMAPE',
         'encoder': {
             'optimizer': {'type': 'Adam', 'beta1': 0.9, 'beta2': 0.999, 'epsilon': 1e-8, 'l2_scale': 1e-2, 'amsgrad': False},
