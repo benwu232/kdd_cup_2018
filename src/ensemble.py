@@ -57,10 +57,8 @@ scoreboard = load_dump('../clf_attn_pos/scoreboard.pkl')
 for k, item in enumerate(scoreboard):
     print('Generating single submission file')
     prefix = item[-1]
-    enc_file = prefix + '_enc.pth'
-    dec_file = prefix + '_dec.pth'
     out_file = '{}/submit{}.csv'.format(submit_dir, str(k+500))
     print(prefix, out_file)
-    predict(enc_file, dec_file, out_file)
+    predict(prefix, out_file)
 
 fusion(fusion_list, submission_csv='{}/submission.csv'.format(submit_dir))

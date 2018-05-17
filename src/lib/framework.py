@@ -406,6 +406,8 @@ class Seq2Seq(EncDec):
     def __init__(self, model_pars):
         super().__init__(model_pars)
         self.len_aq_bj = len(bj_stations)
+        self.model_dir = '../clf_attn_pos/'
+        self.model_pars = model_pars
 
         self.teacher_forcing_ratio = model_pars['teacher_forcing_ratio']
 
@@ -424,6 +426,9 @@ class Seq2Seq(EncDec):
         dec_file = model_prefix + '_dec.pth'
         torch.save(self.encoder, enc_file)
         torch.save(self.decoder, dec_file)
+        model_par_file = model_prefix + '.par'
+        save_dump(self.model_pars, model_par_file)
+
 
     def transform(self, x):
         #x = torch.log1p(x)
