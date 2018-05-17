@@ -16,7 +16,7 @@ if DBG:
     batch_size = 64
 else:
     batch_size = 1024
-    batch_size = 512
+    batch_size = 256
 
 
 def hp_search(max_iter_num=1000000):
@@ -64,7 +64,7 @@ def hp_core(pars):
         'log_interval': 10,
         'min_steps_to_checkpoint': 100,
         #'early_stopping_steps': pars['early_stopping_steps'],
-        'early_stopping_steps': 300,
+        'early_stopping_steps': 100,
         'loss_type': 'SMAPE',
         'encoder': {
             'optimizer': {'type': 'Adam', 'beta1': 0.9, 'beta2': 0.999, 'epsilon': 1e-8, 'l2_scale': pars['l2_scale'], 'amsgrad': pars['amsgrad']},

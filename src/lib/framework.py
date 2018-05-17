@@ -416,6 +416,7 @@ class Seq2Seq(EncDec):
         if 'file_prefix' in model_pars:
             prefix = model_pars['file_prefix']
             self.load_model(prefix)
+        self.logger.info(model_pars)
 
     def load_model(self, prefix, model_dir='../clf/'):
         enc_file = model_dir + prefix + '_enc.pth'
