@@ -288,12 +288,8 @@ class BahdanauAttnDecoderRNN(nn.Module):
         self.with_space_attn = with_space_attn
 
         # Define layers
-        if self.with_space_attn:
-            self.rnn1 = nn.GRU(self.input_size+self.hidden_size*2, hidden_size, n_layers, dropout=dropout_p, bidirectional=self.bidirectional, batch_first=True)
-            self.rnn2 = nn.GRU(hidden_size*3, hidden_size, n_layers, dropout=dropout_p, bidirectional=self.bidirectional, batch_first=True)
-        else:
-            self.rnn1 = nn.GRU(self.input_size+self.hidden_size, hidden_size, n_layers, dropout=dropout_p, bidirectional=self.bidirectional, batch_first=True)
-            self.rnn2 = nn.GRU(hidden_size*2, hidden_size, n_layers, dropout=dropout_p, bidirectional=self.bidirectional, batch_first=True)
+        self.rnn1 = nn.GRU(self.input_size+self.hidden_size*2, hidden_size, n_layers, dropout=dropout_p, bidirectional=self.bidirectional, batch_first=True)
+        self.rnn2 = nn.GRU(hidden_size*3, hidden_size, n_layers, dropout=dropout_p, bidirectional=self.bidirectional, batch_first=True)
         self.out = nn.Linear(hidden_size * 2, output_size)
         self.fc = nn.Linear(self.hidden_size * self.num_direction, self.output_size)
 
@@ -330,13 +326,12 @@ class BahdanauAttnDecoderRNN(nn.Module):
             # Calculate space attention weights
             if self.with_space_attn:
                 space_context = self.space_attn(last_hidden, batch, emb_aqst_enc)
-                input_seq = torch.cat((decoder_input, time_context, space_context), 2)
-                factor = 3
             else:
-                input_seq = torch.cat((decoder_input, time_context), 2)
-                factor = 2
+                space_context = torch.zeros_like(time_context)
 
-            if input_seq.shape[-1] != self.hidden_size*factor:
+            # Combine embedded input word and attended context, run through RNN
+            input_seq = torch.cat((decoder_input, time_context, space_context), 2)
+            if input_seq.shape[-1] != self.hidden_size*3:
                 input_seq, hidden = self.rnn1(input_seq, last_hidden)
                 if self.bidirectional:
                     input_seq = input_seq[:, :, :self.hidden_size] + input_seq[:, :, self.hidden_size:] # Sum bidirectional outputs
