@@ -49,7 +49,7 @@ def fusion(fusion_file_list, submission_csv):
     df_sum.to_csv(submission_csv, index=False)
     print('Bingo!')
 
-sb_len = 31
+sb_len = 11
 
 scoreboard = load_dump('../clf_attn_pos/scoreboard.pkl')
 
