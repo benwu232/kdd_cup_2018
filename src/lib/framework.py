@@ -362,7 +362,7 @@ class EncDec(object):
                         save_dump(scoreboard, scoreboard_file)
 
                     #early stopping
-                    if self.early_stopping_steps >= 0 and step - best_val_loss > self.early_stopping_steps:
+                    if self.early_stopping_steps >= 0 and step - best_val_loss_step > self.early_stopping_steps:
                         if 'hp_cnt' in kwargs:
                             self.logger.info('$$$$$$$$$$$$$ Hyper Search {} $$$$$$$$$$$$$$$$$$$$$$$'.format(kwargs['hp_cnt']))
                         self.logger.info('early stopping - ending training at {}.'.format(step))
