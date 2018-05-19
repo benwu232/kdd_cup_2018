@@ -161,6 +161,14 @@ def init_logger(name='td', to_console=True, log_file=None, level=logging.DEBUG,
 
     return logger
 
+def close_logger(logger):
+    handlers = logger.handlers[:]
+    for handler in handlers:
+        handler.close()
+        logger.removeHandler(handler)
+    logger = None
+    return logger
+
 #get directory size recursively
 def get_dir_size(path='.'):
     total = 0

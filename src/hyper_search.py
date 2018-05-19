@@ -1,4 +1,5 @@
 import os, sys
+import time
 
 import hyperopt
 from hyperopt import hp
@@ -23,17 +24,17 @@ def hp_search(max_iter_num=1000000):
     par_space = {
         'encode_len': hp.choice('encode_len', [120, 144, 168, 192, 240]),
         'n_hidden': hp.choice('n_hidden', [60, 80, 100, 150]),
-        'n_layers': hp.choice('n_layers', [1, 2, 3]),
-        'dropout': hp.choice('dropout', [0.5, 0.4, 0.3]),
+        'n_layers': hp.choice('n_layers', [1, 2]),
+        'dropout': hp.choice('dropout', [0.5, 0.3, 0.1]),
         'with_space_attn': hp.choice('with_space_attn', [True, False]),
         #'early_stopping_steps': hp.choice('early_stopping_steps', [400, 600, 800]),
         'amsgrad': hp.choice('amsgrad', [True, False]),
-        'l2_scale': hp.uniform('l2_scale', 0.001, 0.1),
+        'l2_scale': hp.uniform('l2_scale', 0.001, 0.03),
         'teacher_forcing_ratio': hp.choice('teacher_forcing_ratio', [0.3, 0.5, 0.7]),
     }
 
     trials = hyperopt.Trials()
-    best = hyperopt.fmin(fn=hp_core, space=par_space, algo=hyperopt.tpe.suggest, trials=trials, max_evals=max_iter_num)
+    best = hyperopt.fmin(fn=hp_core, space=par_space, algo=hyperopt.tpe.suggest, trials=trials, max_evals=max_iter_num, rstate=np.random)
     print('Hyperopt over, best score is {}'.format(best))
 
 
@@ -64,7 +65,7 @@ def hp_core(pars):
         'log_interval': 10,
         'min_steps_to_checkpoint': 100,
         #'early_stopping_steps': pars['early_stopping_steps'],
-        'early_stopping_steps': 100,
+        'early_stopping_steps': 400,
         'loss_type': 'SMAPE',
         'encoder': {
             'optimizer': {'type': 'Adam', 'beta1': 0.9, 'beta2': 0.999, 'epsilon': 1e-8, 'l2_scale': pars['l2_scale'], 'amsgrad': pars['amsgrad']},

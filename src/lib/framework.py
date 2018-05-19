@@ -74,6 +74,7 @@ class EncDec(object):
         self.lr_scheduler = None
         self.with_weights = False
         self.logger = init_logger(log_file='../logs/{}.log'.format(self.timestamp))
+        #close_logger(self.logger)
 
         self.with_tblog = model_pars['with_tblog']
         if self.with_tblog:
@@ -275,7 +276,6 @@ class EncDec(object):
         last_save_step = 0
         best_val_loss = 200.0
         best_val_loss_step = 0
-        last_change_step = 0
         best_score = 0.0
         best_score_step = 0
         best_val_accuracy = 0.4
@@ -342,7 +342,6 @@ class EncDec(object):
                     #    self.save_model(model_prefix)
 
                     if len(scoreboard) == 0 or val_loss < scoreboard[-1][0]:
-                        last_change_step = step
                         model_prefix = clf_dir + prefix + self.timestamp + '_' + str(step)
                         self.logger.info('$$$$$$$$$$$$$ Good loss {} at training step {} $$$$$$$$$'.format(val_loss, step))
                         self.logger.info('save to {}'.format(model_prefix))
@@ -363,7 +362,7 @@ class EncDec(object):
                         save_dump(scoreboard, scoreboard_file)
 
                     #early stopping
-                    if self.early_stopping_steps >= 0 and step - last_change_step > self.early_stopping_steps:
+                    if self.early_stopping_steps >= 0 and step - best_val_loss > self.early_stopping_steps:
                         if 'hp_cnt' in kwargs:
                             self.logger.info('$$$$$$$$$$$$$ Hyper Search {} $$$$$$$$$$$$$$$$$$$$$$$'.format(kwargs['hp_cnt']))
                         self.logger.info('early stopping - ending training at {}.'.format(step))
@@ -378,6 +377,7 @@ class EncDec(object):
             step += 1
 
         self.logger.info('best validation loss of {} at training step {}'.format(best_val_loss, best_val_loss_step))
+        self.logger = close_logger(self.logger)
         return best_val_loss
 
 
