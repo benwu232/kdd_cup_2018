@@ -5,10 +5,6 @@ from predict import predict
 import glob
 
 submit_dir = '../submit_attn_pos'
-fusion_list = glob.glob('{}/submit*.csv'.format(submit_dir))
-redundant = '{}/submit.csv'.format(submit_dir)
-if redundant in fusion_list:
-    fusion_list.remove(redundant)
 
 def fusion(fusion_file_list, submission_csv):
     print('Fusioning ...')
@@ -49,7 +45,7 @@ def fusion(fusion_file_list, submission_csv):
     df_sum.to_csv(submission_csv, index=False)
     print('Bingo!')
 
-sb_len = 11
+sb_len = 17
 
 scoreboard = load_dump('../clf_attn_pos/scoreboard.pkl')
 
@@ -61,4 +57,8 @@ for k, item in enumerate(scoreboard[:sb_len]):
     print(prefix, out_file)
     predict(prefix, out_file)
 
+fusion_list = glob.glob('{}/submit*.csv'.format(submit_dir))
+redundant = '{}/submit.csv'.format(submit_dir)
+if redundant in fusion_list:
+    fusion_list.remove(redundant)
 fusion(fusion_list, submission_csv='{}/submission.csv'.format(submit_dir))
