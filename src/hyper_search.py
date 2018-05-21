@@ -22,11 +22,11 @@ else:
 
 def hp_search(max_iter_num=1000000):
     par_space = {
-        'encode_len': hp.choice('encode_len', [120, 144, 168, 192, 240]),
+        'encode_len': hp.choice('encode_len', [480, 600, 720, 840, 960]),
         'n_hidden': hp.choice('n_hidden', [60, 80, 100, 150]),
-        'n_layers': hp.choice('n_layers', [1, 2]),
+        'n_layers': hp.choice('n_layers', [1, 2, 3]),
         'dropout': hp.choice('dropout', [0.5, 0.3, 0.1]),
-        'with_space_attn': hp.choice('with_space_attn', [True, False]),
+        'with_space_attn': False,
         #'early_stopping_steps': hp.choice('early_stopping_steps', [400, 600, 800]),
         'amsgrad': hp.choice('amsgrad', [True, False]),
         'l2_scale': hp.uniform('l2_scale', 0.001, 0.03),
@@ -50,8 +50,7 @@ def hp_core(pars):
         'dec_file': None,
         'encode_len': pars['encode_len'],
         'with_space_attn': pars['with_space_attn'],
-        'val_to_end': 320,
-        'dec_type': 1,
+        'dec_type': 0,
         'clip': 10,
         'lr': 0.001,
         'batch_size': batch_size,
@@ -79,6 +78,7 @@ def hp_core(pars):
         },
         'teacher_forcing_ratio': pars['teacher_forcing_ratio'],
     }
+    hp_pars['val_to_end'] = hp_pars['encode_len'] + 100
 
     dg = DataBuilder(hp_pars)
     nn = Seq2Seq(hp_pars)

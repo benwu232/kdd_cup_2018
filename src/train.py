@@ -22,7 +22,7 @@ if __name__ == '__main__':
         'val_to_end': 260,
         #'encode_len': 960,
         #'val_to_end': 1080,
-        'dec_type': 1,
+        'dec_type': 0,
         'clip': 10,
         'lr': 0.001,
         'batch_size': batch_size,

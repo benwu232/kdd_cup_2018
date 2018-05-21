@@ -475,8 +475,8 @@ class Seq2Seq(EncDec):
 
             use_teacher_forcing = True if random.random() < self.teacher_forcing_ratio else False
             for t in range(target_len):
-                #decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
-                decoder_output, decoder_hidden, context, attn_weights = self.decoder(decoder_input, decoder_hidden, encoder_outputs, batch, emb_aqst_enc)
+                decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
+                #decoder_output, decoder_hidden, context, attn_weights = self.decoder(decoder_input, decoder_hidden, encoder_outputs, batch, emb_aqst_enc)
 
                 #print(predictions[t].size(), decoder_output[0].size())
                 predictions[:, t, :] = decoder_output[:, 0, :]
@@ -535,8 +535,8 @@ class Seq2Seq(EncDec):
             target_batches = dec_targets.to(device)
 
             for t in range(target_len):
-                #decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
-                decoder_output, decoder_hidden, context, attn_weights = self.decoder(decoder_input, decoder_hidden, encoder_outputs, batch, emb_aqst_enc)
+                decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
+                #decoder_output, decoder_hidden, context, attn_weights = self.decoder(decoder_input, decoder_hidden, encoder_outputs, batch, emb_aqst_enc)
 
                 #print(all_decoder_outputs[t].size(), decoder_output[0].size())
                 predictions[:, t, :] = decoder_output[:, 0, :]
@@ -567,8 +567,8 @@ class Seq2Seq(EncDec):
             predictions = predictions.to(device)
 
             for t in range(predict_seq_len):
-                #decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
-                decoder_output, decoder_hidden, context, attn_weights = self.decoder(decoder_input, decoder_hidden, encoder_outputs, batch, emb_aqst_enc)
+                decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
+                #decoder_output, decoder_hidden, context, attn_weights = self.decoder(decoder_input, decoder_hidden, encoder_outputs, batch, emb_aqst_enc)
 
                 #print(all_decoder_outputs[t].size(), decoder_output[0].size())
                 predictions[:, t, :] = decoder_output[:, 0, :]
