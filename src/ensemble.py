@@ -1,10 +1,9 @@
 import os
 import pandas as pd
-from lib.define import load_dump
 from predict import predict
 import glob
+from lib.define import *
 
-submit_dir = '../submit_attn_pos'
 
 def fusion(fusion_file_list, submission_csv):
     print('Fusioning ...')
@@ -47,18 +46,18 @@ def fusion(fusion_file_list, submission_csv):
 
 sb_len = 17
 
-scoreboard = load_dump('../clf_attn_pos/scoreboard.pkl')
+scoreboard = load_dump(os.path.join(clf_dir, 'scoreboard.pkl'))
 
 #predict multiple times
 for k, item in enumerate(scoreboard[:sb_len]):
     print('Generating single submission file')
     prefix = item[-1]
-    out_file = '{}/submit{}.csv'.format(submit_dir, str(k+500))
+    out_file = '{}submit{}.csv'.format(submit_dir, str(k+500))
     print(prefix, out_file)
     predict(prefix, out_file)
 
-fusion_list = glob.glob('{}/submit*.csv'.format(submit_dir))
-redundant = '{}/submit.csv'.format(submit_dir)
+fusion_list = glob.glob('{}submit*.csv'.format(submit_dir))
+redundant = '{}submit.csv'.format(submit_dir)
 if redundant in fusion_list:
     fusion_list.remove(redundant)
-fusion(fusion_list, submission_csv='{}/submission.csv'.format(submit_dir))
+fusion(fusion_list, submission_csv='{}submission.csv'.format(submit_dir))

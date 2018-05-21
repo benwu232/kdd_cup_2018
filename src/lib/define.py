@@ -10,6 +10,9 @@ import sklearn
 from sklearn import preprocessing
 from collections import OrderedDict
 
+clf_dir = '../clf/'
+submit_dir = '../submit/'
+
 DBG = 0
 
 DECODE_STEPS = 48

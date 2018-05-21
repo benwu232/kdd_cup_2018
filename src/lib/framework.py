@@ -246,7 +246,6 @@ class EncDec(object):
         #summary = torch_summarize_df((self.model.n_features, self.model.past_len), self.model)
         #self.logger.info(summary)
         #self.logger.info('total trainable parameters: {}'.format(summary['nb_params'].sum()))
-        clf_dir = '../clf_attn_pos/'
 
         max_score = 1.0
         sb_len = 31
@@ -412,7 +411,7 @@ class Seq2Seq(EncDec):
     def __init__(self, model_pars):
         super().__init__(model_pars)
         self.len_aq_bj = len(bj_stations)
-        self.model_dir = '../clf_attn_pos/'
+        self.model_dir = clf_dir
         self.model_pars = model_pars
 
         self.teacher_forcing_ratio = model_pars['teacher_forcing_ratio']
