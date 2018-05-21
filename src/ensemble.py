@@ -44,7 +44,7 @@ def fusion(fusion_file_list, submission_csv):
     df_sum.to_csv(submission_csv, index=False)
     print('Bingo!')
 
-sb_len = 17
+sb_len = 31
 
 scoreboard = load_dump(os.path.join(clf_dir, 'scoreboard.pkl'))
 
@@ -52,7 +52,7 @@ scoreboard = load_dump(os.path.join(clf_dir, 'scoreboard.pkl'))
 for k, item in enumerate(scoreboard[:sb_len]):
     print('Generating single submission file')
     prefix = item[-1]
-    out_file = '{}submit{}.csv'.format(submit_dir, str(k+500))
+    out_file = '{}submit{}.csv'.format(submit_dir, str(k))
     print(prefix, out_file)
     predict(prefix, out_file)
 
