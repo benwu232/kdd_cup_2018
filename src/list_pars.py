@@ -2,8 +2,6 @@ import os
 
 from lib.define import  *
 
-clf_dir = '../clf_attn_pos'
-
 sb_len = 31
 
 scoreboard = load_dump(os.path.join(clf_dir, 'scoreboard.pkl'))

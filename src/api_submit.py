@@ -1,8 +1,9 @@
 # coding: utf-8
 
 import requests
+from lib.define import *
 
-file_name = '../submit_attn_pos/submission.csv'
+file_name = '{}submission.csv'.format(submit_dir)
 files = {'files': open(file_name, 'rb')}
 print('submit ', file_name)
 data = {
