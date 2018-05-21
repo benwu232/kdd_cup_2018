@@ -304,12 +304,16 @@ class EncDec(object):
                     lr = self.lr_scheduler.get_lr()[0]
                 self.logger.info('lr = {}'.format(lr))
                 self.tblog_value('lr', lr, step)
-                # validation evaluation
-                if self.with_weights:
-                    val_batch, val_target, val_weight = next(ValGen)
-                else:
-                    val_batch = next(ValGen)
-                val_fn_loss = self.validate_batch(val_batch)
+                val_batch_num = 10
+                loss_array = np.zeros(val_batch_num)
+                for n in range(val_batch_num):
+                    # validation evaluation
+                    if self.with_weights:
+                        val_batch, val_target, val_weight = next(ValGen)
+                    else:
+                        val_batch = next(ValGen)
+                    loss_array[n] = self.validate_batch(val_batch)
+                val_fn_loss = loss_array.mean()
 
                 train_loss = train_fn_loss
                 train_loss_history.append(train_loss)
