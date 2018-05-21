@@ -52,7 +52,7 @@ scoreboard = load_dump(os.path.join(clf_dir, 'scoreboard.pkl'))
 for k, item in enumerate(scoreboard[:sb_len]):
     print('Generating single submission file')
     prefix = item[-1]
-    out_file = '{}submit{}.csv'.format(submit_dir, str(k))
+    out_file = '{}submit{}.csv'.format(submit_dir, str(k+500))
     print(prefix, out_file)
     predict(prefix, out_file)
 
