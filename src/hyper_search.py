@@ -26,10 +26,11 @@ def hp_search(max_iter_num=1000000):
         'n_hidden': hp.choice('n_hidden', [60, 80, 100, 150]),
         'n_layers': hp.choice('n_layers', [1, 2]),
         'dropout': hp.choice('dropout', [0.5, 0.3, 0.1]),
+        'lr': hp.loguniform('lr', np.log(1e-5), np.log(0.01)),
         'with_space_attn': hp.choice('with_space_attn', [True, False]),
         #'early_stopping_steps': hp.choice('early_stopping_steps', [400, 600, 800]),
         'amsgrad': hp.choice('amsgrad', [True, False]),
-        'l2_scale': hp.uniform('l2_scale', 0.001, 0.03),
+        'l2_scale': hp.loguniform('l2_scale', np.log(0.001), np.log(0.5)),
         'teacher_forcing_ratio': hp.choice('teacher_forcing_ratio', [0.3, 0.5, 0.7]),
     }
 
