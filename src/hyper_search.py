@@ -62,7 +62,7 @@ def hp_core(pars):
         'n_enc_layers': pars['n_layers'],
         'n_dec_layers': pars['n_layers'],
         'dropout': pars['dropout'],
-        'log_interval': 10,
+        'log_interval': 20,
         'min_steps_to_checkpoint': 100,
         #'early_stopping_steps': pars['early_stopping_steps'],
         'early_stopping_steps': 400,
