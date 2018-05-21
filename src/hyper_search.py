@@ -50,7 +50,6 @@ def hp_core(pars):
         'dec_file': None,
         'encode_len': pars['encode_len'],
         'with_space_attn': pars['with_space_attn'],
-        'val_to_end': 320,
         'dec_type': 1,
         'clip': 10,
         'lr': 0.001,
@@ -79,6 +78,7 @@ def hp_core(pars):
         },
         'teacher_forcing_ratio': pars['teacher_forcing_ratio'],
     }
+    hp_pars['val_to_end'] = hp_pars['encode_len'] + 100
 
     dg = DataBuilder(hp_pars)
     nn = Seq2Seq(hp_pars)
