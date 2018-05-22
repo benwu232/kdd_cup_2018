@@ -22,12 +22,12 @@ else:
 
 def hp_search(max_iter_num=1000000):
     par_space = {
-        'encode_len': hp.choice('encode_len', [120, 144, 168, 192, 240]),
-        'n_hidden': hp.choice('n_hidden', [60, 80, 100, 150]),
-        'n_layers': hp.choice('n_layers', [1, 2]),
+        'encode_len': hp.choice('encode_len', [144, 168, 192, 240, 288, 320]),
+        'n_hidden': hp.choice('n_hidden', [60, 80, 100, 150, 200]),
+        'n_layers': hp.choice('n_layers', [1, 2, 3]),
         'dropout': hp.choice('dropout', [0.5, 0.3, 0.1]),
         'lr': hp.loguniform('lr', np.log(1e-4), np.log(0.01)),
-        'with_space_attn': hp.choice('with_space_attn', [True, False]),
+        #'with_space_attn': hp.choice('with_space_attn', [True, False]),
         #'early_stopping_steps': hp.choice('early_stopping_steps', [400, 600, 800]),
         'amsgrad': hp.choice('amsgrad', [True, False]),
         'l2_scale': hp.loguniform('l2_scale', np.log(0.001), np.log(0.5)),
@@ -50,7 +50,8 @@ def hp_core(pars):
         'enc_file': None,
         'dec_file': None,
         'encode_len': pars['encode_len'],
-        'with_space_attn': pars['with_space_attn'],
+        #'with_space_attn': pars['with_space_attn'],
+        'with_space_attn': False,
         'dec_type': 1,
         'clip': 10,
         'lr': 0.001,
