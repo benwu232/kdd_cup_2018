@@ -22,7 +22,7 @@ else:
 
 def hp_search(max_iter_num=1000000):
     par_space = {
-        'encode_len': hp.choice('encode_len', [144, 168, 192, 240, 288, 320]),
+        'encode_len': hp.choice('encode_len', [144, 168, 192, 240, 360, 480, 600, 720]),
         'n_hidden': hp.choice('n_hidden', [60, 80, 100, 150, 200]),
         'n_layers': hp.choice('n_layers', [1, 2, 3]),
         'dropout': hp.choice('dropout', [0.5, 0.3, 0.1]),
