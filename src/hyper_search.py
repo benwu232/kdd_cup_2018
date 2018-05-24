@@ -18,7 +18,7 @@ if DBG:
 else:
     batch_size = 128
     batch_size = 1024
-    batch_size = 512
+    batch_size = 256
 
 
 def hp_search(max_iter_num=1000000):
