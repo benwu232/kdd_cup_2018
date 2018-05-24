@@ -303,7 +303,7 @@ class EncDec(object):
                     lr = self.lr_scheduler.get_lr()[0]
                 self.logger.info('lr = {}'.format(lr))
                 self.tblog_value('lr', lr, step)
-                val_batch_num = 10
+                val_batch_num = 4
                 loss_array = np.zeros(val_batch_num)
                 for n in range(val_batch_num):
                     # validation evaluation
