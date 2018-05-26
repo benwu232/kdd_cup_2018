@@ -23,7 +23,7 @@ else:
 
 def hp_search(max_iter_num=1000000):
     par_space = {
-        'encode_len': hp.choice('encode_len', [360, 240, 480, 600, 720, 840, 960]),
+        'encode_len': hp.choice('encode_len', [120, 144, 168, 192, 360, 240, 480, 600]),
         'n_hidden': hp.choice('n_hidden', [60, 80, 100, 150, 200]),
         'n_layers': hp.choice('n_layers', [1, 2, 3]),
         'dropout': hp.choice('dropout', [0.5, 0.3, 0.1]),
@@ -66,7 +66,7 @@ def hp_core(pars):
         'log_interval': 20,
         'min_steps_to_checkpoint': 100,
         #'early_stopping_steps': pars['early_stopping_steps'],
-        'early_stopping_steps': 400,
+        'early_stopping_steps': 800,
         'loss_type': 'SMAPE',
         'encoder': {
             'optimizer': {'type': 'Adam', 'beta1': 0.9, 'beta2': 0.999, 'epsilon': 1e-8, 'l2_scale': pars['l2_scale'], 'amsgrad': pars['amsgrad']},
