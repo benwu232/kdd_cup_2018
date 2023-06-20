@@ -18,7 +18,7 @@ I also tried to use grid meterology data. I tried to calculate the meterology da
 
 ## Some lessons
 1. Participating the competition as early as you can. For me, a novice, to make a stable model takes at least a month. 
-2. A good coross validation framework is a must. I did bad this time. Seems my model overfitted when I use hyperopt.
+2. A good cross validation framework is a must. I did bad this time. Seems my model overfitted when I use hyperopt.
 3. Seems the data in this competion is a little too few for the models like RNN.
 
 ## Some philosophy thinking
